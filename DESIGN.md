@@ -7,13 +7,14 @@ request. The first request was "a wider palette, more soft sounds". The second w
 "not just keys: strings, xylophones, whatever; the mother of all modules for soft
 sounds". It has grown from four keyboards to **thirty-eight instruments in five
 families**, built on six engines. **The modal engine is built** (build steps 3
-and 4), and so are the banks and the FM voice (step 5): twenty-one instruments
-play, with the shared effects, measured on the Move. They are Felt Upright, Una
-Corda Grand, Electric Grand, Tine Piano, Reed Piano, Celesta, Toy
-Piano, Tonewheel Organ, Flute Organ, Glass E.Piano, String Ensemble, Vibraphone,
-Marimba, Xylophone, Glockenspiel, Tubular Bells, Handbells,
-Handpan, Tongue Drum, Kalimba / Music Box and Hammered Dulcimer. The other
-seventeen instruments have their
+and 4), and so are the banks and the FM voice (step 5) and the plucked half of
+the waveguide engine (step 6): twenty-five instruments play, with the shared
+effects, measured on the Move. They are Felt Upright, Una Corda Grand, Electric
+Grand, Clavichord, Tine Piano, Reed Piano, Celesta, Toy Piano, Tonewheel Organ,
+Flute Organ, Glass E.Piano, String Ensemble, Vibraphone, Marimba, Xylophone,
+Glockenspiel, Tubular Bells, Handbells, Handpan, Tongue Drum, Kalimba / Music
+Box, Harp, Nylon Guitar, Hammered Dulcimer and Pizzicato. The other
+thirteen instruments have their
 pages and labels in place, but **`TYPE` does not offer them until their engine is
 built**, so nothing on the Move is a stand-in. Each instrument arrives with its own
 default sound on every page (see *Every instrument starts beautiful*).
@@ -226,7 +227,7 @@ tables and defaults on top of them.
 
 ### 1. Modal: struck and plucked solids, and struck strings
 
-This is the workhorse. It covers twenty instruments: pianos, mallets, bells, handpan
+This is the workhorse. It covers seventeen instruments: pianos, mallets, bells, handpan
 and kalimba.
 
 - **What it is.** A ringing object is a set of decaying sine tones (modes). Each
@@ -390,14 +391,73 @@ and kalimba.
 
 ### 2. Waveguide: plucked and bowed strings, and the clavichord
 
-- **What it is.** A string is a delay line, a loss and dispersion filter, and a
-  fractional-delay tuner (Jaffe & Smith's extended Karplus–Strong; Karjalainen,
-  Välimäki & Tolonen's plucked-string models; Rauhala & Välimäki's tunable
-  dispersion).
-- **Plucked instruments** (harp, guitar, pizzicato, clavichord) use commuted
-  synthesis. The body's response is folded into the excitation (Välimäki,
-  Laurson & Erkut; Smith). The pluck is shaped by `SOFT`, fingertip to nail, and
-  by pluck position.
+The plucked half is built (2026-10-04, `waveguide.c`): Harp, Nylon Guitar,
+Pizzicato and Clavichord. The bowed half is next.
+
+- **What it is.** A string is a delay line closed on itself through its losses
+  (Jaffe & Smith's extended Karplus–Strong; Karjalainen, Välimäki & Tolonen).
+  One string per note, inline in the voice, up to C1 (1,349 samples).
+  - **Loss.** A one-pole low-pass and a gain. The fundamental falls 60 dB in
+    its T60 exactly; a partial at f in T60 / (1 + (f/f_b)²), where f_b is
+    `EDGE`'s brightness, 300 Hz to 8 kHz. Both are worked out per note, so the
+    decay does not depend on the line's length. The pole may spend at most
+    90 % of the loss one period allows at f₀, so a dark `EDGE` on a short note
+    never takes the fundamental with it. (The first version let it: a dark
+    Pizzicato's high notes died in a tenth of their ring time.)
+  - **Stiffness.** A first-order allpass (Van Duyne & Smith; Rauhala &
+    Välimäki): more delay low than high, so the upper partials stretch sharp.
+    `STIFF` moves where it turns over, from the top of the band down to the
+    note's fourth partial, relative to the note, so it stretches alike in every
+    register.
+  - **Tuning.** A third-order Lagrange read at the period less both filters'
+    phase delay at f₀. Every key is within 3 cents at any setting, and the read
+    can move each sample, which the clavichord's *Bebung* uses.
+- **The pluck is commuted** (Smith; Välimäki, Laurson & Erkut): the string is
+  linear, so the body can come before it, folded into what drives it.
+  1. One impulse, as wide as the fingertip (`SOFT`: a pad at 250 Hz to a nail
+     at 7 kHz) and gentler for a soft touch (×(0.5 + velocity)²).
+  2. Tilted to fall as 1/k from the fundamental, as a plucked string's
+     partials do.
+  3. The body: the direct path plus four band-passes in phase with it at their
+     peaks, each up to about 12 dB at `BODY` full.
+  4. A comb at the pluck point (`SPOT`, by the bridge to the middle), which
+     takes out the partials with a node there: at the middle the second
+     partial falls by 50 dB or more.
+  5. Into the loop ahead of the loss filter, so the first period is rounded
+     like every one after it.
+- **The finger's own sound** (`NOISE`): a short band of noise beside the
+  string: the fingertip, the nail's click, the tangent's knock.
+- **Fingers alternate.** Each pluck starts the other way from the last. Four
+  plucks of a C major chord meet again in phase after 15 ms (two, three, four
+  and five periods), and plucked all the same way they stacked into one spike
+  2 to 3 dB above the rest. A real hand pulls strings this way and that.
+- **Released,** a harp's or guitar's string rings on unless `DAMP` is up (the
+  hand); a pizzicato's or clavichord's is always damped, `DAMP` setting how
+  fast (the finger, the listing cloth).
+
+| Instrument | The strings | Body | `CHAR` |
+|---|---|---|---|
+| Harp | Gut and nylon, a long ring (7 s at middle C) | Soundbox, 140–900 Hz | `BLOOM` |
+| Nylon Guitar | 4 s at middle C, keys below E2 an octave up | Air mode at 100 Hz, the top above it, broad | `BLOOM` |
+| Pizzicato | Gut, stopped by the other hand: 1.6 s at C3, dark | The viola's, 230–1,100 Hz | `DEEP` |
+| Clavichord | Brass, bright and stiff, 3.5 s at middle C | A small board, 250–2,400 Hz | `BEND` |
+
+- **`BLOOM`** is a bank of open strings shared by every note, driven from the
+  bridge (the sum of the plucked voices): the guitar's six (E2 A2 D3 G3 B3 E4)
+  and a chromatic harp's octave below middle C. The strings whose partials meet
+  the played note's take them up and ring on, about 6 s at C3; the rest stay
+  quiet. At A3 it adds 13 to 15 dB at 1.5 s. Changing to another instrument or
+  moving `DECAY` retunes it once it has faded out.
+- **`DEEP`** moves the Pizzicato's body from the viola's to the cello's
+  (100–600 Hz) and its strings a little longer and darker.
+- **`BEND`** is the clavichord's *Bebung*: pad pressure pushes the tangent and
+  the string goes sharp, up to 60 cents. The lightest fifth of the pad is a
+  resting finger and stays in tune, because the Move's pads report some
+  pressure as soon as a key is held.
+- **Cost on the Move:** Harp 8.3 % with its bank, Nylon Guitar 6.9 %,
+  Clavichord 4.6 %, Pizzicato 3.4 %.
+
+The bowed half, still to be built:
 - **Bowed instruments** (cello, violin, section) use Smith's bowed-string
   waveguide. The bow is a nonlinear friction junction where the string sticks and
   slips, after McIntyre, Schumacher & Woodhouse. The friction curve is chosen
@@ -740,7 +800,7 @@ and fails if any knob appears twice, if `CLOSE` returns, or if `SPEED` is shown 
 the Vibraphone.
 
 **Picking an instrument.** `TYPE` steps through the instruments built so far, in
-family order: today the twenty-one named at the top of this document. The jog
+family order: today the twenty-five named at the top of this document. The jog
 wheel browses **presets** on the Main page; for now there is one per instrument, its
 default sound. At 1.0 the presets become the catalogue: 38 instruments × 3 = 114,
 named *Family · Instrument · Variation*, for example *Mallets · Vibraphone · Motor
@@ -788,13 +848,17 @@ key. Any Effects key not named takes its shared default.
 | Handpan | Fingertips, the shell's air under the low notes | SOFT 65, RING 55, DECAY 55, SPACE 30 | BODY 60, SPLIT 15, NOISE 30, DAMP 0 | SIZE 60 (2.7 s), DARK 45, DELAY 20 |
 | Tongue Drum | Rubber mallets on a wooden box | SOFT 60, RING 50, DECAY 50, SPACE 25 | BODY 65, SPLIT 10, NOISE 30, DAMP 0 | SIZE 45 (2.1 s), DARK 50, DELAY 12 |
 | Hammered Dulcimer | Courses a little apart, struck near the bridge, blooming | SOFT 60, BLOOM 55, DECAY 55, SPACE 25 | SPOT 20, SPLIT 35, BODY 80, NOISE 30, DAMP 0 | SIZE 50 (2.2 s), DARK 45, DELAY 15 |
+| Clavichord | In a small room: the tangent toward the end, stiff brass, the *Bebung* half in | SOFT 50, BEND 50, DECAY 40, SPACE 15 | SPOT 25, BODY 50, EDGE 60, NOISE 35, DAMP 50, STIFF 50 | Small: SIZE 30 (1.5 s), DARK 50, DELAY 5 |
+| Harp | A concert harp in a hall, its lower strings answering | SOFT 60, BLOOM 40, DECAY 70, SPACE 35 | SPOT 35, BODY 60, EDGE 45, NOISE 20, DAMP 5, STIFF 20 | A hall: SIZE 65 (3.1 s), DARK 45, DELAY 25 |
+| Nylon Guitar | Fingerstyle near the soundhole, the open strings ringing a little | SOFT 60, BLOOM 35, DECAY 50, SPACE 20 | SPOT 25, BODY 65, EDGE 40, NOISE 30, DAMP 20, STIFF 25 | SIZE 45 (2.1 s), DARK 50, DELAY 12 |
+| Pizzicato | Cellos and violas plucked with the pad of the finger, nearer the cello | SOFT 70, DEEP 60, DECAY 50, SPACE 30 | SPOT 45, BODY 70, EDGE 30, NOISE 35, DAMP 30, STIFF 15 | SIZE 60 (2.7 s), DARK 45, DELAY 20 |
 
 Values are percentages; the times are the plate's measured ring (RT60).
 
 **They are equally loud.** Switching instruments must not jump in level. Each
 instrument's own gain is set so the same phrase (a gentle chord, a line over it, a
 fuller chord, velocities 55–76) measures within half a decibel of
-**−26.5 LUFS** on all twenty-one (measured −26.4 to −26.6), with the voicing's
+**−26.5 LUFS** on all twenty-five (measured −26.4 to −26.6), with the voicing's
 room included. Before this the first four were 12 dB apart, the Felt Upright
 quietest. Two engine changes made the
 match possible without pushing loud chords into the limiter:
@@ -860,6 +924,12 @@ the sound by at least a set amount**, measured on a middle C:
 | **Strings:** SWAY | The vibrato spreads the fourth harmonic at least 6 dB |
 | **Glass E.Piano:** GLASS, TINE | The bell pair's sideband at 4 f₀, the tink at 13 f₀: each at least 12 dB up |
 | TUNE | Off the whole numbers the bell goes inharmonic: 1.5 f₀ at least 12 dB up |
+| **Plucked:** SOFT, DECAY, DAMP, TONE, BODY, SPOT, STIFF, NOISE | As for the struck strings above (STIFF on the fourth partial at C3) |
+| EDGE (plucked) | The fourth partial at least 12 dB up against the fundamental at 0.25 s: the overtones ring on |
+| BLOOM (harp, guitar) | Rings at least 6 dB more at 1.5 s, at A3 |
+| DEEP | The third partial at least 8 dB down against the fundamental at C3 |
+| BEND | Full pressure sharpens the note at least 20 cents; none with BEND at zero |
+| Tuning (plucked) | Every C from C3 to C6 within 3 cents |
 | SIZE | The room rings at least 20 dB longer at 2 s |
 | DARK | The room's tail at least 6 dB darker, heard on the Electric Grand, hard, pickups full up (once on a hard Felt Upright, whose brightness there was partly the contact ringing up; see *Stable at any setting*) |
 | DELAY | The room answers at least 80 ms later |
@@ -1140,10 +1210,14 @@ with the pedal down and the plate on.
 | Flute Organ | 11.6 % | 338 |
 | String Ensemble | 7.0 % | 203 |
 | Tonewheel Organ | 6.0 % | 174 |
+| Harp | 8.3 % | 241 |
+| Nylon Guitar | 6.9 % | 200 |
+| Clavichord | 4.6 % | 135 |
+| Pizzicato | 3.4 % | 98 |
 | Effects alone | 2.7 % | 79 |
 
 Remeasured with seventeen instruments (2026-10-04); the four of build step 5
-measured the same day, sixteen keys held. The Flute Organ first measured
+and the four plucked strings of step 6 measured the same day, sixteen keys held. The Flute Organ first measured
 21.8 %: its inner loop worked out each pitch (`powf`) and the chiff's
 resonator (`cosf`) every sample, and walked all 128 keys. Those now happen once
 per block, for the keys that are sounding. The Glass E.Piano's four sines per
@@ -1204,15 +1278,18 @@ from the benchmark sharing the CPU, not from the engine.
   - `voice.c`: engine dispatch, pressure routing, the budget, fading ghosts
     for stolen notes, and the 20 ms knob glide.
   - `modal.c` and `contact.c`.
-  - `fx.c`: soundboard, tremolo, drive, plate and tilt.
+  - `banks.c` (the organs and the string machine) and `fm.c` (the Glass
+    E.Piano).
+  - `waveguide.c`: the plucked strings, their commuted bodies, and `BLOOM`'s
+    open strings.
+  - `fx.c`: soundboard, tremolo, drive, the Leslie, plate and tilt.
   - `tools/render` and `tools/bench`.
 
-  The engines still to come:
-  - One C file per engine: `modal.c`, `waveguide.c`, `banded.c`, `air.c`,
-    `banks.c`, `synthetic.c`.
-  - Shared pieces: `contact.c` (felt, yarn and fingertip collision), `friction.c`
-    (bow and finger friction junction), `body.c` (commuted and shared body
-    filters), `fx.c`.
+  Still to come:
+  - The bow in `waveguide.c`, then `banded.c`, `air.c`, and the choir's
+    formants.
+  - `friction.c`, the bow and finger friction junction, shared by the bowed
+    strings and the banded engine.
   - The recipes: `instruments.c`, a table of 38 entries, each naming its engine,
     its tables, its defaults and its CHAR key.
 - **`state`** is one JSON blob holding the global keys and, for each instrument
@@ -1278,8 +1355,13 @@ from the benchmark sharing the CPU, not from the engine.
    user found the tine and reed pianos good. Installed on the Move, awaiting the
    user's listening. 701 checks pass. **Release 0.3** waits on the user's
    go-ahead.
-6. **Waveguide engine:** Harp, Nylon Guitar, Pizzicato, Clavichord. Then the bow
-   and friction: Solo Cello, Solo Violin, String Section. **Release 0.4.**
+6. **Waveguide engine:** ~~Harp, Nylon Guitar, Pizzicato, Clavichord.~~
+   **Done**, 2026-10-04, on request after the organ group. Installed on the
+   Move, awaiting the user's listening. 807 checks pass. The knob tests caught
+   a loss filter that could take a short note's fundamental with it, a body
+   some 40 dB louder than its string, and finger noise that loudness matching
+   moved. Then the bow and friction: Solo Cello, Solo Violin, String Section.
+   **Release 0.4.**
 7. **Air engine and banded waveguide engine:** Flute, Pan Flute, Ocarina,
    Recorder, Clarinet, Harmonium; Bowed Vibes, Glass Harmonica, Singing Bowl.
    **Release 0.5.**

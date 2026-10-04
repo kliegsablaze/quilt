@@ -292,6 +292,8 @@ static void *note(const char *type, int key, int vel, int frames, int release_at
     A->set_param(p, "volume", "-24");
     A->set_param(p, "m_noise", "0");
     A->set_param(p, "m_body", "0");
+    A->set_param(p, "p_noise", "0");
+    A->set_param(p, "p_body", "0");
     for (const char *e = extra; e && *e;) {           /* "key=value;key=value" */
         char k[32], v[32];
         int n = 0;
@@ -999,6 +1001,89 @@ static void machines(void) {
     }
 }
 
+/* ---- the plucked strings: in tune, and every knob heard ---- */
+
+static double m_edge(void) { return part_db(11025, 8192, cur_f0 * cur_ratio) - part_db(11025, 8192, cur_f0); }
+static double m_pitch(void) { return 1200 * log2(peak_near(22050, 16384, cur_f0, cur_f0 * 0.03) / cur_f0); }
+
+/* A held note with the pad pressed from 0.2 s; the pitch from 0.5 s. */
+static double pressed(const char *type, int key, const char *extra) {
+    void *p = note(type, key, 100, 4096, -1, extra);
+    midi3(p, 0xA0, key, 127);
+    int16_t out[256];
+    for (int f = 0; f < 44100; f += 128) {
+        A->render_block(p, out, 128);
+        for (int i = 0; i < 128 && f + i < 44100; i++) wave[f + i] = out[2 * i] / 32768.0f;
+    }
+    A->destroy_instance(p);
+    return 1200 * log2(peak_near(13230, 16384, cur_f0, cur_f0 * 0.06) / cur_f0);
+}
+
+static void plucked(void) {
+    static const char *const pl[4] = { "Harp", "Nylon Guitar", "Pizzicato", "Clavichord" };
+    double a0, a1, d;
+    for (int i = 0; i < 4; i++) {
+        const char *t = pl[i];
+        const int inst = quilt_instrument_by_name(t);
+        /* In tune across the keys, at the shared defaults (a little stiffness). */
+        double worst = 0;
+        for (int key = 48; key <= 84; key += 12) {
+            cur_f0 = waveguide_freq(inst, key);
+            void *p = note(t, key, 90, 22050 + 16384, -1, "volume=0;decay=1");
+            double c = m_pitch();
+            if (fabs(c) > fabs(worst)) worst = c;
+            A->destroy_instance(p);
+        }
+        CHECK(fabs(worst) < 3, "%s: in tune from C3 to C6 (worst %+.1f cents)", t, worst);
+
+        cur_f0 = waveguide_freq(inst, 60);
+        cur_ratio = 4;
+        d = turn(t, 60, 90, 8192 + 441, -1, "volume=0", "soft", m_partial, &a0, &a1);
+        CHECK(d < -12, "%s SOFT: the overtones fall at least 12 dB (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 90, 22050, -1, "volume=0", "soft", m_level, &a0, &a1);
+        CHECK(fabs(d) < 10, "%s SOFT: changes the tone more than the level (%+.1f dB)", t, d);
+        d = turn(t, 60, 90, 44100 * 2, -1, "volume=0", "decay", m_tail, &a0, &a1);
+        CHECK(d > 12, "%s DECAY: rings at least 12 dB longer (%.1f -> %.1f dB at 1.5 s)", t, a0, a1);
+        d = turn(t, 60, 100, 44100, 22050, "volume=0;decay=1;c_harp=0;c_nylon_guitar=0", "p_damp", m_release, &a0, &a1);
+        CHECK(d < -20, "%s DAMP: stops a released note at least 20 dB sooner (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 90, 8192 + 441, -1, "volume=0", "tone", m_partial, &a0, &a1);
+        CHECK(d / 2 > 4, "%s TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB over 2 octaves)", t, a0, a1);
+        d = turn(t, 60, 90, 22050, -1, "volume=0", "p_body", m_level, &a0, &a1);
+        CHECK(d > 3, "%s BODY: at least 3 dB more body (%+.1f dB)", t, d);
+        d = turn(t, 60, 90, 44100, -1, "volume=0", "p_edge", m_edge, &a0, &a1);
+        CHECK(d > 12, "%s EDGE: the overtones ring on, at least 12 dB up at 0.25 s (%.1f -> %.1f dB)", t, a0, a1);
+        cur_ratio = 2;
+        d = turn(t, 60, 90, 8192 + 441, -1, "volume=0", "p_spot", m_partial, &a0, &a1);
+        CHECK(d < -15, "%s SPOT: the middle of the string hollows the second partial (%.1f -> %.1f dB)", t, a0, a1);
+        cur_f0 = waveguide_freq(inst, 48);
+        cur_ratio = 4;
+        d = turn(t, 48, 100, 16384 + 1024, -1, "volume=0;soft=0.2;decay=1;c_harp=0;c_nylon_guitar=0",
+                 "p_stiff", m_stretch, &a0, &a1);
+        CHECK(d > 20, "%s STIFF: stretches the fourth partial at least 20 cents (%.0f -> %.0f cents)", t, a0, a1);
+        d = burst(t, "volume=0", "p_noise");
+        CHECK(d > -14, "%s NOISE: the finger is heard, %.1f dB against the note", t, d);
+    }
+
+    /* BLOOM: the open strings take up the note and ring on. */
+    const char *bl[2] = { "Harp", "Nylon Guitar" }, *bk[2] = { "c_harp", "c_nylon_guitar" };
+    for (int i = 0; i < 2; i++) {
+        d = turn(bl[i], 57, 90, 44100 * 2, -1, "volume=0", bk[i], m_tail, &a0, &a1);
+        CHECK(d > 6, "%s BLOOM: rings at least 6 dB more at 1.5 s (%.1f -> %.1f dB)", bl[i], a0, a1);
+    }
+    /* DEEP: from the viola's body to the cello's, so the low end comes up. */
+    cur_f0 = waveguide_freq(quilt_instrument_by_name("Pizzicato"), 48);
+    cur_ratio = 3;
+    d = turn("Pizzicato", 48, 90, 8192 + 441, -1, "volume=0;p_body=1", "c_pizzicato", m_partial, &a0, &a1);
+    CHECK(d < -8, "Pizzicato DEEP: the third partial falls at least 8 dB against the fundamental (%.1f -> %.1f dB)",
+          a0, a1);
+    /* BEND: pressing the pad sharpens the note, and only with BEND up. */
+    cur_f0 = waveguide_freq(quilt_instrument_by_name("Clavichord"), 60);
+    a0 = pressed("Clavichord", 60, "volume=0;c_clavichord=0");
+    a1 = pressed("Clavichord", 60, "volume=0;c_clavichord=1");
+    CHECK(fabs(a0) < 2 && a1 > 20, "Clavichord BEND: full pressure bends the note up at least 20 cents "
+          "(%+.1f -> %+.1f cents)", a0, a1);
+}
+
 /* The reverb alone: the same note with and without the plate, subtracted.
  * Everything else is deterministic, so what is left is the plate. */
 static float wet[44100 * 4];
@@ -1178,6 +1263,7 @@ int main(int argc, char **argv) {
     reverb();
     audible();
     machines();
+    plucked();
     effects();
     clicks();
     cost();

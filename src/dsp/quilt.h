@@ -19,7 +19,7 @@
 #define MODAL_MAXOSC 160        /* 72 string modes, two strings each, plus spare */
 #define MODAL_BUDGET 1536       /* oscillators across all voices; see Will it fit */
 #define QUILT_NINST 38
-#define QUILT_NTYPES 21        /* the instruments TYPE offers: those built so far */
+#define QUILT_NTYPES 25        /* the instruments TYPE offers: those built so far */
 #define QUILT_MAX_SHAPE_KEYS 16
 
 typedef enum { FAM_KEYS, FAM_MALLETS, FAM_STRINGS, FAM_GLASS, FAM_BREATH } family_t;
@@ -135,6 +135,44 @@ typedef struct {
     int damped, dampable;
 } fm_voice_t;
 
+/* One plucked string: DESIGN.md, Waveguide. The line is inline, not a
+ * pointer, so a voice copied into a ghost slot keeps its own. */
+#define WG_LINE 2048            /* the longest period: C1, 1349 samples */
+#define WG_HIST 1024            /* the pluck's comb: up to half a period */
+typedef struct {
+    float line[WG_LINE];
+    int w;
+    float f0, P, D, tau;    /* the period, the read, the filters' phase delay at f0 */
+    float bend;             /* the clavichord's Bebung: x f0, gliding */
+    float g, gd, a, lz;     /* the loss: gain ringing and damped, pole, state */
+    float ac, ax1, ay1;     /* the stiffness allpass */
+    int dampable;
+    float level, pan_l, pan_r, body;
+    /* the pluck, while it lasts */
+    int ex_n, ex_len, hw;
+    float amp, lpk, lp1, lp2, ik, il, p1, p2;
+    float res_c[4], res_r2[4], res_g[4], res_y1[4], res_y2[4];
+    float hist[WG_HIST], comb_d, comb_norm;
+    /* the finger's own sound */
+    float nz_env, nz_td, nz_k, nz_k2, nz_lp, nz_lp2, nz_a;
+    uint32_t rng;
+} wg_voice_t;
+
+/* BLOOM's open strings, shared by every note. */
+#define WG_BANK_STRINGS 12
+#define WG_BANK_LINE 1024       /* down to C2 */
+typedef struct {
+    float line[WG_BANK_LINE];
+    int w;
+    float D, g, a, lz;
+} wg_bank_string_t;
+
+typedef struct {
+    wg_bank_string_t s[WG_BANK_STRINGS];
+    int n, inst, active, fading;
+    float fade, decay;      /* DECAY when tuned */
+} wg_bank_t;
+
 typedef struct {
     int active, held, note, inst;
     float fade, fade_step; /* ghosts only */
@@ -143,6 +181,7 @@ typedef struct {
     int got_press;
     modal_voice_t mv;
     fm_voice_t fm;
+    wg_voice_t wg;
 } voice_t;
 
 /* The always-running banks: tonewheels, pipes and the string machine.
@@ -208,10 +247,12 @@ typedef struct {
     float charv[QUILT_NINST];
     float slot[QUILT_NINST][QUILT_MAX_SHAPE_KEYS];
     int pedal;            /* CC64 */
+    int pluck_dir;        /* the next pluck's direction: fingers alternate */
     float modwheel;       /* CC1 */
     float lfo, motor;
     voice_t v[QUILT_VOICES + QUILT_GHOSTS];
     banks_t banks;
+    wg_bank_t symp;
     fx_t fx;
     char *hierarchy, *chain_params;
     int hierarchy_len, chain_params_len;
@@ -248,6 +289,14 @@ float quilt_bar_ratio(int inst, int k);   /* a bar's declared mode ratio, or 0 *
 int fm_supports(int inst);
 void fm_note_on(quilt_t *q, voice_t *v);
 void fm_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
+
+/* waveguide.c */
+int waveguide_supports(int inst);
+float waveguide_freq(int inst, int note);
+void waveguide_note_on(quilt_t *q, voice_t *v);
+void waveguide_render(quilt_t *q, voice_t *v, float *left, float *right, float *bridge, int frames);
+void waveguide_bank_render(quilt_t *q, const float *bridge, float *left, float *right, int frames);
+void waveguide_bank_reset(wg_bank_t *b);
 
 /* banks.c */
 int banks_supports(int inst);

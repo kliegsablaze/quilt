@@ -2,7 +2,8 @@
  * Voices: how a note is started and released, and how voices are shared out.
  *
  *   - Every instrument TYPE offers plays through its engine: modal.c,
- *     fm.c, or banks.c, whose keys are its own and take no voice.
+ *     fm.c, waveguide.c, or banks.c, whose keys are its own and take no
+ *     voice.
  *   - Struck notes ring after release while a pedal holds them (CC64, or the
  *     modal page's PEDAL knob), and the damper stops them.
  *   - A global budget of modal oscillators, not a voice count, is the guard
@@ -37,7 +38,9 @@ int quilt_speed_shown(int inst) {
     return !named(inst, "Vibraphone") && !named(inst, "Tonewheel Organ");
 }
 
-int quilt_built(int inst) { return modal_supports(inst) || fm_supports(inst) || banks_supports(inst); }
+int quilt_built(int inst) {
+    return modal_supports(inst) || fm_supports(inst) || waveguide_supports(inst) || banks_supports(inst);
+}
 
 int quilt_modal_in_use(const quilt_t *q) {
     int n = 0;
@@ -77,8 +80,8 @@ static int quietest(const quilt_t *q, int except_note) {
 
 void quilt_note_on(quilt_t *q, int note, int vel) {
     if (banks_supports(q->type)) { banks_note_on(q, note, vel); return; }
-    const int fm = fm_supports(q->type);
-    if (!fm && !modal_supports(q->type)) return;
+    const int fm = fm_supports(q->type), wg = waveguide_supports(q->type);
+    if (!fm && !wg && !modal_supports(q->type)) return;
     int slot = -1;
     for (int i = 0; i < QUILT_VOICES && slot < 0; i++)
         if (q->v[i].active && q->v[i].note == note) slot = i;
@@ -90,7 +93,9 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
         steal(q, slot);
     }
 
-    int need = fm ? 0 : modal_osc_needed(q, q->type, note);
+    /* Only modal notes draw on the oscillator budget. */
+    const int modal = !fm && !wg;
+    int need = modal ? modal_osc_needed(q, q->type, note) : 0;
     while (quilt_modal_in_use(q) + need > MODAL_BUDGET) {
         int victim = quietest(q, note);
         if (victim < 0) break;
@@ -98,7 +103,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     }
     int granted = MODAL_BUDGET - quilt_modal_in_use(q);
     if (granted > need) granted = need;
-    if (granted < 8 && !fm) granted = 8;
+    if (granted < 8 && modal) granted = 8;
 
     voice_t *v = &q->v[slot];
     memset(v, 0, sizeof(*v));
@@ -109,6 +114,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     v->vel = (float)vel / 127.0f;
     v->fade = 1.0f;
     if (fm) fm_note_on(q, v);
+    else if (wg) waveguide_note_on(q, v);
     else modal_note_on(q, v, granted);
 }
 
@@ -137,10 +143,11 @@ void quilt_all_off(quilt_t *q) {
 }
 
 void quilt_render(quilt_t *q, float *left, float *right, int frames) {
-    float board[QUILT_MAX_BLOCK];
+    float board[QUILT_MAX_BLOCK], bridge[QUILT_MAX_BLOCK];
     memset(left, 0, sizeof(float) * (size_t)frames);
     memset(right, 0, sizeof(float) * (size_t)frames);
     memset(board, 0, sizeof(float) * (size_t)frames);
+    memset(bridge, 0, sizeof(float) * (size_t)frames);
 
     /* Knobs glide over about 20 ms instead of jumping, so turning one never
      * pops. What is read per sample ramps across the block from gs_prev. */
@@ -152,8 +159,10 @@ void quilt_render(quilt_t *q, float *left, float *right, int frames) {
         voice_t *v = &q->v[i];
         if (!v->active) continue;
         if (fm_supports(v->inst)) fm_render(q, v, left, right, frames);
+        else if (waveguide_supports(v->inst)) waveguide_render(q, v, left, right, bridge, frames);
         else modal_render(q, v, left, right, board, frames);
     }
+    waveguide_bank_render(q, bridge, left, right, frames);
     banks_render(q, left, right, frames);
 
     /* One motor for every vibraphone note. */

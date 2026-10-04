@@ -76,6 +76,7 @@ static void *create_instance(const char *module_dir, const char *json_defaults) 
     for (int i = 0; i < G_COUNT; i++) q->g[i] = QUILT_GLOBALS[i].def;
     for (int i = 0; i < QUILT_NINST; i++) quilt_reset_instrument(q, i);
     banks_reset(&q->banks);
+    waveguide_bank_reset(&q->symp);
     quilt_apply_preset(q, 0);
     memcpy(q->gs, q->g, sizeof(q->g));
     q->fx.pre_s = 1.0f + q->g[G_DELAY] * 0.1f * QUILT_SR;

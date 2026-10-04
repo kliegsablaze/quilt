@@ -175,7 +175,7 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
     { "Harp", "harp", S, ENG_WAVEGUIDE, SH_PLUCKED, "Bloom", "Sympathetic Ring", .6f, .7f, 0, .35f },
     { "Nylon Guitar", "nylon_guitar", S, ENG_WAVEGUIDE, SH_PLUCKED, "Bloom", "Sympathetic Ring", .6f, .5f, 0, .2f },
     { "Hammered Dulcimer", "hammered_dulcimer", S, ENG_MODAL, SH_MODAL, "Bloom", "Sympathetic Ring", .6f, .55f, 0, .25f },
-    { "Pizzicato", "pizzicato", S, ENG_WAVEGUIDE, SH_PLUCKED, "Deep", "Viola to Cello", .7f, .35f, 0, .3f },
+    { "Pizzicato", "pizzicato", S, ENG_WAVEGUIDE, SH_PLUCKED, "Deep", "Viola to Cello", .7f, .5f, 0, .3f },
     { "Solo Cello", "solo_cello", S, ENG_WAVEGUIDE, SH_BOWED, "Veil", "Bow Position (Sul Tasto)", .6f, .4f, .3f, .3f },
     { "Solo Violin", "solo_violin", S, ENG_WAVEGUIDE, SH_BOWED, "Veil", "Bow Position (Sul Tasto)", .6f, .4f, .3f, .3f },
     { "String Section", "string_section", S, ENG_WAVEGUIDE, SH_BOWED, "Width", "Player Spread", .6f, .5f, .2f, .4f },
@@ -196,10 +196,11 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
  * Move is a stand-in (DESIGN.md, Build order). Each joins this list, in the
  * catalogue's order, when its sound is done; tests check the two agree. */
 const char *const QUILT_TYPE_NAMES[QUILT_NTYPES] = {
-    "Felt Upright", "Una Corda Grand", "Electric Grand", "Tine Piano", "Reed Piano",
+    "Felt Upright", "Una Corda Grand", "Electric Grand", "Clavichord", "Tine Piano", "Reed Piano",
     "Celesta", "Toy Piano", "Tonewheel Organ", "Flute Organ", "Glass E.Piano", "String Ensemble",
     "Vibraphone", "Marimba", "Xylophone", "Glockenspiel", "Tubular Bells", "Handbells",
-    "Handpan", "Tongue Drum", "Kalimba / Music Box", "Hammered Dulcimer",
+    "Handpan", "Tongue Drum", "Kalimba / Music Box", "Harp", "Nylon Guitar", "Hammered Dulcimer",
+    "Pizzicato",
 };
 
 const param_def_t QUILT_TYPE_PARAM = {
@@ -287,6 +288,19 @@ static const struct { const char *name, *values; } VOICINGS[] = {
     /* Courses a little apart, struck near the bridge, the undamped strings blooming. */
     { "Hammered Dulcimer", "char=0.55 m_split=0.35 m_spot=0.2 m_body=0.8 m_noise=0.3 m_damp=0 "
                            "size=0.5 dark=0.45 delay=0.15" },
+    /* A clavichord in a small room: the tangent toward the end, stiff brass,
+     * the Bebung half in for when the pad is pressed. */
+    { "Clavichord", "char=0.5 p_spot=0.25 p_body=0.5 p_edge=0.6 p_noise=0.35 p_damp=0.5 p_stiff=0.5 "
+                    "size=0.3 dark=0.5 delay=0.05" },
+    /* A concert harp in a hall, its lower strings answering. */
+    { "Harp", "char=0.4 p_spot=0.35 p_body=0.6 p_edge=0.45 p_noise=0.2 p_damp=0.05 p_stiff=0.2 "
+              "size=0.65 dark=0.45 delay=0.25" },
+    /* Fingerstyle near the soundhole, the open strings ringing a little. */
+    { "Nylon Guitar", "char=0.35 p_spot=0.25 p_body=0.65 p_edge=0.4 p_noise=0.3 p_damp=0.2 p_stiff=0.25 "
+                      "size=0.45 dark=0.5 delay=0.12" },
+    /* Cellos and violas plucked with the pad of the finger, nearer the cello. */
+    { "Pizzicato", "char=0.6 p_spot=0.45 p_body=0.7 p_edge=0.3 p_noise=0.35 p_damp=0.3 p_stiff=0.15 "
+                   "size=0.6 dark=0.45 delay=0.2" },
     /* Rosewood and yarn, nearly dry. */
     { "Marimba", "char=0 m_split=0.05 m_body=0.75 m_damp=0 m_noise=0.32 "
                  "size=0.45 dark=0.5 delay=0.15 tone=0.52" },
