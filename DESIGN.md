@@ -7,11 +7,12 @@ request. The first request was "a wider palette, more soft sounds". The second w
 "not just keys: strings, xylophones, whatever; the mother of all modules for soft
 sounds". It has grown from four keyboards to **thirty-eight instruments in five
 families**, built on six engines. **The modal engine is built** (build steps 3
-and 4): fifteen instruments play through it, with the shared effects, measured on
-the Move. They are Felt Upright, Una Corda Grand, Electric Grand, Celesta, Toy
+and 4): seventeen instruments play through it, with the shared effects, measured on
+the Move. They are Felt Upright, Una Corda Grand, Electric Grand, Tine Piano, Reed
+Piano, Celesta, Toy
 Piano, Vibraphone, Marimba, Xylophone, Glockenspiel, Tubular Bells, Handbells,
 Handpan, Tongue Drum, Kalimba / Music Box and Hammered Dulcimer. The other
-twenty-three instruments have their
+twenty-one instruments have their
 pages and labels in place, but **`TYPE` does not offer them until their engine is
 built**, so nothing on the Move is a stand-in. Each instrument arrives with its own
 default sound on every page (see *Every instrument starts beautiful*).
@@ -235,8 +236,14 @@ and kalimba.
 - **Where the modes sit.** This depends on the object:
   - **Strings:** f_k = k·f₀·√(1+B·k²). This is Bank, Zambon & Fontana's
     real-time modal piano.
-  - **Clamped bars:** reeds, tines, toy-piano rods, kalimba and tongue drum,
-    at 1 : 6.27 : 17.55.
+  - **Clamped bars:** toy-piano rods, kalimba and tongue drum, at
+    1 : 6.27 : 17.55.
+  - **Tines and reeds:** cantilevers too, pulled higher. The tine is one prong
+    of an asymmetric fork, 1 : 7.1 : 18.6; its second mode is Gabrielli et al.'s
+    quick, bright *tink* and dies within a tenth of the note. The tonebar, its
+    other prong, is the resonator on f₀ and carries the sustain. The reed, with
+    the solder blob that tunes it, is 1 : 7.3 : 21 and shorter-lived. Its
+    `BODY` is the same resonator on f₀: the reed bar's share.
   - **Free bars:** glockenspiel and celesta, at 1 : 2.76 : 5.40.
   - **Undercut tuned bars:** vibraphone 1 : 4, marimba 1 : 4 : 10,
     xylophone 1 : 3.
@@ -275,6 +282,20 @@ and kalimba.
   contact of 2.7 ms at 0.5 m/s falling to 2.3 ms at 4 m/s, and peak forces of
   2–17 N. C2 gives 3.5–5 ms and C7 gives 0.9–1.6 ms. That is their trend and
   close to their scale. `tests/run.sh` keeps these as checks.
+- **Stable at any setting** (fixed 2026-10-04, while adding the tine and reed).
+  The struck point was stepped explicitly. With the hardest felt on the thinnest
+  treble strings or the stiffest bars, the felt's stiffness (including its
+  hysteresis, which at this step is about five times the plain stiffness)
+  outran the step, and the note rang up to full scale: 162 notes did, among them
+  Una Corda, Electric Grand and Dulcimer above C5 at `SOFT` 0 and a hard touch.
+  The struck point is now solved implicitly against the felt's local stiffness,
+  so it cannot ring up, whatever the stiffness. The hammer is still stepped
+  explicitly; it is far from its limit. Every other note sounds as before,
+  within 0.4 dB (the Toy Piano 1.2 dB) and a few hertz of brightness, and the
+  gains were re-matched. Some of what had passed for brightness was this
+  ringing: the Electric Grand at `SOFT` 0 came out 6 dB less bright, so its hammers
+  are now lighter (×0.7) and softer (×0.3) to keep `SOFT`'s full range. A test
+  strikes every key of every instrument at both ends of `SOFT`.
 - **Graduated mallets.** One mallet across the whole bar range kept contact
   near 2 ms everywhere. That dulls the top octaves, whose period is shorter
   than the pulse: they came out 13 dB per octave quieter. So the yarn hardens up
@@ -320,6 +341,15 @@ and kalimba.
 - **`TWANG`** (Electric Grand) is the piezo pickups, which hear the bridge's
   force; it rises with the partial's number, so turning up brings the overtones
   forward (partial k × k^1.1 at full).
+- **`BARK`** (Tine Piano) brings the tine nearer the pickup's pole. A gentle
+  note stays round, nearly a sine with its *tink*; a firm one swings far
+  enough that the pickup folds the wave, and the second harmonic comes up:
+  at a firm touch it is 10 dB under the fundamental with `BARK` at zero, and
+  level with it or above at full.
+- **`BITE`** (Reed Piano) narrows the gap between reed and pickup plate. The
+  pickup hears the reed swinging in much more than out, so a harder touch
+  adds a reedy edge, again mostly the second harmonic. By default, at a firm
+  touch, the second harmonic is about 10 dB down and the third 20 dB.
 - **`BUZZ`** (Kalimba) adds the mbira's buzzers, the bottle caps or rings that
   rattle against the box when a tine swings hard. A band of noise, about
   4–10 kHz, rides the note's own swing (|y|), so the rattle chatters with the
@@ -337,9 +367,25 @@ and kalimba.
     bar–tube coupling.
   - **Cavity.** Handpan and tongue drum: one Helmholtz mode coupled to the low
     notes.
-  - **Pickups.** Static nonlinearities near the tine or reed: magnetic for the
-    tine (flux, then its time derivative), electrostatic for the reed, 1/(1−x/d).
-    They are oversampled ×2 only when driven hard enough to alias.
+  - **Pickups** (Tine Piano and Reed Piano). The modes' sum is the tine's or
+    reed's swing, scaled so that full velocity swings it a set number of
+    pickup gaps anywhere on the keyboard (from the momentum a blow passes).
+    The pickup is a static curve on that swing, and what is heard is its rate of
+    change, as a coil or a charged plate gives. Each curve's slope at rest is
+    1, so `BARK` and `BITE` change the tone and not the quiet level.
+    - **Magnetic, for the tine:** flux 1/(1+s²) of the tine's offset s from
+      the pole, resting a little to one side (s = −0.4 gaps). Swung hard, past
+      the pole, the flux folds back. That is the bark.
+    - **Electrostatic, for the reed:** 1/(1−x/d) as the reed swings toward
+      the plate (Pfeifle), kept from touching by a smooth limit.
+    - **Dividing by the note's frequency** keeps the fundamental level across
+      the keys, and leaves the overtones the edge the rate of change gives them.
+    - **No oversampling.** The plan was to oversample ×2 when hard enough to
+      alias. Instead, above C6 the swing falls as (f/1047 Hz)^−1.5, as short
+      treble tines and reeds swing less on the instruments. At the top, struck as
+      hard as possible with `BARK` or `BITE` full, what lies off the harmonic
+      series measures about −30 dB, and that includes the tines' own
+      inharmonic partials. CPU is 6.9 % and 5.7 % on the Move.
 
 ### 2. Waveguide: plucked and bowed strings, and the clavichord
 
@@ -430,7 +476,9 @@ gates.
 
 ### Shared effects
 
-The signal path is: instrument, then tremolo or auto-pan, then gentle drive, then
+The signal path is: instrument, then tremolo or auto-pan (on the Reed Piano a
+tremolo in one channel, as its amplifier has; on the others an auto-pan, the
+Tine Piano's like the Suitcase's), then gentle drive, then
 Leslie (organ only), then plate reverb (Dattorro), then tilt EQ, then `VOL`, then
 8 dB of headroom, then the limiter, then `int16`.
 
@@ -631,7 +679,7 @@ and fails if any knob appears twice, if `CLOSE` returns, or if `SPEED` is shown 
 the Vibraphone.
 
 **Picking an instrument.** `TYPE` steps through the instruments built so far, in
-family order: today the fifteen named at the top of this document. The jog
+family order: today the seventeen named at the top of this document. The jog
 wheel browses **presets** on the Main page; for now there is one per instrument, its
 default sound. At 1.0 the presets become the catalogue: 38 instruments × 3 = 114,
 named *Family · Instrument · Variation*, for example *Mallets · Vibraphone · Motor
@@ -668,6 +716,8 @@ key. Any Effects key not named takes its shared default.
 | Glockenspiel | Soft-wrapped mallets, long-ringing steel | SOFT 70, BELL 35, DECAY 50, TONE 45, SPACE 28 | BODY 30, SPLIT 5, NOISE 15, DAMP 0 | SIZE 60 (2.3 s), DARK 45, DELAY 25 |
 | Kalimba / Music Box | A thumb piano with a touch of its buzzers | SOFT 60, BUZZ 30, DECAY 55, SPACE 25 | BODY 70, SPLIT 10, NOISE 30, DAMP 0 | SIZE 40 (1.8 s), DARK 50, DELAY 10 |
 | Electric Grand | A CP-70 in a ballad | SOFT 50, TWANG 35, DECAY 50, SWAY 20, SPACE 20 | BODY 50, SPLIT 20, NOISE 30, DAMP 30 | SIZE 45 (2.0 s), DARK 50, DELAY 12, SPEED 25 (a slow auto-pan) |
+| Tine Piano | A suitcase tine piano, voiced a little toward bark | SOFT 60, BARK 40, DECAY 55, SWAY 30, SPACE 20 | BODY 60, SPLIT 10, NOISE 25, DAMP 30 | SIZE 45 (2.0 s), DARK 50, DELAY 12, SPEED 30 (the slow stereo vibrato) |
+| Reed Piano | A reed piano turned down in a small room | SOFT 60, BITE 45, DECAY 50, SWAY 25, SPACE 20 | BODY 50, SPLIT 8, NOISE 25, DAMP 30 | SIZE 35 (1.7 s), DARK 55, DELAY 8, SPEED 45 (its own tremolo), DRIVE 15 (the amplifier just warm) |
 | Tubular Bells | Chimes in a church, the pedal half down | SOFT 50, MUTE 20, DECAY 55, SPACE 32 | BODY 15, SPLIT 10, NOISE 25, DAMP 10 | SIZE 70 (3.2 s), DARK 45, DELAY 30 |
 | Handbells | The tierce half in, the bells beating gently | SOFT 60, MINOR 50, DECAY 55, SPACE 32 | BODY 30, SPLIT 15, NOISE 20, DAMP 0 | SIZE 65 (3.0 s), DARK 40, DELAY 25 |
 | Handpan | Fingertips, the shell's air under the low notes | SOFT 65, RING 55, DECAY 55, SPACE 30 | BODY 60, SPLIT 15, NOISE 30, DAMP 0 | SIZE 60 (2.7 s), DARK 45, DELAY 20 |
@@ -679,7 +729,7 @@ Values are percentages; the times are the plate's measured ring (RT60).
 **They are equally loud.** Switching instruments must not jump in level. Each
 instrument's own gain is set so the same phrase (a gentle chord, a line over it, a
 fuller chord, velocities 55–76) measures within half a decibel of
-**−26.5 LUFS** on all fifteen (measured −26.2 to −27.0), with the voicing's
+**−26.5 LUFS** on all seventeen (measured −26.4 to −26.6), with the voicing's
 room included. Before this the first four were 12 dB apart, the Felt Upright
 quietest. Two engine changes made the
 match possible without pushing loud chords into the limiter:
@@ -729,9 +779,10 @@ the sound by at least a set amount**, measured on a middle C:
 | RING | The tuned overtone at least 12 dB up |
 | BLOOM | Rings at least 6 dB more at 1.5 s |
 | TWANG | The fourth partial at least 8 dB forward |
+| BARK, BITE | At a firm touch, the second harmonic at least 10 dB up, while the level changes less than 6 dB |
 | DRIVE | At least 15 dB more harmonics |
 | SIZE | The room rings at least 20 dB longer at 2 s |
-| DARK | The room's tail at least 6 dB darker, heard on a hard piano |
+| DARK | The room's tail at least 6 dB darker, heard on the Electric Grand, hard, pickups full up (once on a hard Felt Upright, whose brightness there was partly the contact ringing up; see *Stable at any setting*) |
 | DELAY | The room answers at least 80 ms later |
 
 Getting there took real changes, not relabelling:
@@ -985,25 +1036,28 @@ with the pedal down and the plate on.
 
 | Instrument | Mean | Mean, µs |
 |---|---|---|
-| Felt Upright | **14.3 %** | 414 |
-| Una Corda Grand | 13.7 % | 397 |
-| Electric Grand | 13.5 % | 391 |
-| Hammered Dulcimer | 12.8 % | 372 |
-| Vibraphone | 6.3 % | 182 |
-| Kalimba / Music Box | 5.3 % | 155 |
-| Marimba | 4.8 % | 139 |
-| Glockenspiel | 4.8 % | 141 |
-| Handbells | 4.8 % | 139 |
-| Xylophone | 4.6 % | 133 |
-| Tubular Bells | 4.5 % | 131 |
-| Handpan | 4.5 % | 130 |
+| Felt Upright | **14.5 %** | 420 |
+| Electric Grand | 14.4 % | 417 |
+| Hammered Dulcimer | 13.9 % | 403 |
+| Una Corda Grand | 13.7 % | 399 |
+| Vibraphone | 7.1 % | 207 |
+| Tine Piano | 6.9 % | 201 |
+| Kalimba / Music Box | 6.1 % | 177 |
+| Reed Piano | 5.7 % | 166 |
+| Handbells | 5.0 % | 145 |
+| Marimba | 4.9 % | 141 |
+| Xylophone | 4.8 % | 138 |
+| Glockenspiel | 4.8 % | 140 |
+| Handpan | 4.7 % | 137 |
+| Tubular Bells | 4.6 % | 133 |
 | Celesta | 4.0 % | 116 |
-| Tongue Drum | 3.4 % | 100 |
-| Toy Piano | 2.7 % | 78 |
-| Effects alone | 2.8 % | 82 |
+| Tongue Drum | 3.8 % | 111 |
+| Toy Piano | 2.9 % | 83 |
+| Effects alone | 2.7 % | 79 |
 
-Remeasured with fifteen instruments (2026-10-04). The four string instruments
-use nearly the whole budget of 1,536 oscillators; the rest are light.
+Remeasured with seventeen instruments (2026-10-04). The four string instruments
+use nearly the whole budget of 1,536 oscillators; the rest are light. The tine
+and reed pianos' pickups cost about 1 % over a plain bar.
 
 This is inside the quarter-block target, with room for the heavier engines. Two
 changes took the pianos from 18.7 % to 14 %:
@@ -1122,7 +1176,11 @@ from the benchmark sharing the CPU, not from the engine.
      too hard for their low-lying modes; `BODY` did nothing without a
      resonator; and the dulcimer was modelled as a piano unison, which hid its
      beating. See *The engines*. 524 checks pass.
-   - Then the pickups: Tine Piano and Reed Piano. **Release 0.2.**
+   - ~~Tine Piano and Reed Piano, with the pickups.~~ **Done**, 2026-10-04,
+     installed on the Move, awaiting the user's listening. Building them found
+     that the contact could ring up to full scale on hard treble notes; fixed
+     for every instrument (see *Stable at any setting*). 575 checks pass.
+     **Release 0.2** waits on the user's listening and go-ahead.
 5. **Banks and synthetic engines:** Tonewheel Organ (with Leslie), Flute Organ,
    String Ensemble, Glass E.Piano. **Release 0.3.**
 6. **Waveguide engine:** Harp, Nylon Guitar, Pizzicato, Clavichord. Then the bow
@@ -1179,7 +1237,9 @@ module black-box through the v2 API, as `chain_host` would.
 - **No pops.** Every Main and Effects knob jumped end to end under a sounding
   note adds no spike beyond the note's own. Four notes struck hard together peak
   below −3 dBFS on every instrument.
-- **Robustness.** Budget exhaustion steals cleanly.
+- **Robustness.** Budget exhaustion steals cleanly. Every key of every
+  instrument, struck at full velocity with the hardest and then the softest
+  felt, sounds and stays below −2.5 dBFS on its own: none rings up.
 - **Cost.** Block time on the Mac in the test, then on the Move with 16 notes on
   each instrument. This is recorded in this document.
 - **Listening.** You play it.

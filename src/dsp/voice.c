@@ -21,6 +21,11 @@ int quilt_sway_is_tremolo(int inst) {
     return strcmp(QUILT_INST[inst].name, "Vibraphone") != 0;
 }
 
+int quilt_sway_is_pan(int inst) {
+    /* The reed piano's tremolo is in its amplifier: one channel, no pan. */
+    return strcmp(QUILT_INST[inst].name, "Reed Piano") != 0;
+}
+
 int quilt_modal_in_use(const quilt_t *q) {
     int n = 0;
     for (int i = 0; i < QUILT_VOICES; i++)

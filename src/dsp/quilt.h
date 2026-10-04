@@ -19,7 +19,7 @@
 #define MODAL_MAXOSC 160        /* 72 string modes, two strings each, plus spare */
 #define MODAL_BUDGET 1536       /* oscillators across all voices; see Will it fit */
 #define QUILT_NINST 38
-#define QUILT_NTYPES 15        /* the instruments TYPE offers: those built so far */
+#define QUILT_NTYPES 17        /* the instruments TYPE offers: those built so far */
 #define QUILT_MAX_SHAPE_KEYS 16
 
 typedef enum { FAM_KEYS, FAM_MALLETS, FAM_STRINGS, FAM_GLASS, FAM_BREATH } family_t;
@@ -117,6 +117,7 @@ typedef struct {
     float thump, thump_env, thump_lp, thump_k, thump_a;
     float hiss_env, hiss_lp, hiss_k, hiss_a;
     float buzz_z, buzz_z2;  /* the kalimba's buzzers */
+    float pu_norm, pu_comp, pu_prev;   /* the tine or reed pickup */
     float held_t, roll_t, roll_vel;
     int roll_flip;
     uint32_t rng;
@@ -175,6 +176,7 @@ void quilt_pressure(quilt_t *q, int note, int value);   /* note < 0: every note 
 void quilt_all_off(quilt_t *q);
 void quilt_render(quilt_t *q, float *left, float *right, int frames);
 int quilt_sway_is_tremolo(int inst);
+int quilt_sway_is_pan(int inst);
 int quilt_modal_in_use(const quilt_t *q);
 
 /* modal.c */

@@ -21,7 +21,8 @@
  * longer, so its force pulse is longer and smoother and cannot excite the
  * high modes. A fast or hard one is brief, stiff and bright.
  *
- * Integrated at four substeps per output sample (semi-implicit Euler).
+ * Integrated at four substeps per output sample: the hammer explicitly, the
+ * struck point implicitly against the felt's local stiffness.
  */
 #include <math.h>
 #include <string.h>
@@ -72,11 +73,13 @@ float contact_step(contact_t *c) {
     float sum = 0.0f;
     for (int i = 0; i < SUB; i++) {
         float comp = c->xh - c->ys;
-        float f = 0.0f;
+        float f = 0.0f, kf = 0.0f;
         if (comp > 0.0f) {
             float cp = powf(comp, c->p);
             f = c->K * (cp + c->alpha * (cp - c->cp_prev) / dt);
             if (f < 0.0f) f = 0.0f;
+            /* The felt's stiffness here, hysteresis included. */
+            kf = c->K * c->p * cp / comp * (1.0f + c->alpha / dt);
             c->cp_prev = cp;
             c->touched = 1;
         } else {
@@ -85,20 +88,25 @@ float contact_step(contact_t *c) {
         c->vh -= f / c->m * dt;
         c->xh += c->vh * dt;
 
-        float vs;
+        /* The struck point moves as z2 ys' = F + (what pushes it back), with
+         * F the felt's force taken at the new compression, to first order.
+         * Solved for the new ys (backward Euler), so a stiff felt on a
+         * light, stiff bar or a thin treble string stays stable: explicitly
+         * it rang up and blew up once kf dt / z2 passed 2. */
+        float rhs = c->z2 / dt * c->ys + f + kf * (c->xh - comp), den = c->z2 / dt + kf;
         if (c->kind == CONTACT_STRING) {
-            /* Velocity at the hammer: its own push, plus the inverted return
-             * of what it sent toward the near end tau substeps ago. */
+            /* Its own push leaves as a wave both ways; the half sent toward
+             * the near end returns inverted tau substeps later. */
             int mask = CONTACT_DELAY - 1;
             float back = -c->dl[(c->w - c->tau) & mask];
-            float out = f / c->z2;
-            c->dl[c->w & mask] = out;
-            c->w++;
-            vs = out + back;
+            rhs += c->z2 * back;
         } else {
-            vs = (f - c->kb * c->ys) / c->z2;
+            den += c->kb;
         }
-        c->ys += vs * dt;
+        float ys = rhs / den;
+        f = fmaxf(0.0f, f + kf * (c->xh - ys - comp));
+        if (c->kind == CONTACT_STRING) c->dl[c->w++ & (CONTACT_DELAY - 1)] = f / c->z2;
+        c->ys = ys;
         sum += f;
         if (f > c->peak) c->peak = f;
     }

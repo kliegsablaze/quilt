@@ -196,7 +196,8 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
  * Move is a stand-in (DESIGN.md, Build order). Each joins this list, in the
  * catalogue's order, when its sound is done; tests check the two agree. */
 const char *const QUILT_TYPE_NAMES[QUILT_NTYPES] = {
-    "Felt Upright", "Una Corda Grand", "Electric Grand", "Celesta", "Toy Piano",
+    "Felt Upright", "Una Corda Grand", "Electric Grand", "Tine Piano", "Reed Piano",
+    "Celesta", "Toy Piano",
     "Vibraphone", "Marimba", "Xylophone", "Glockenspiel", "Tubular Bells", "Handbells",
     "Handpan", "Tongue Drum", "Kalimba / Music Box", "Hammered Dulcimer",
 };
@@ -233,6 +234,14 @@ static const struct { const char *name, *values; } VOICINGS[] = {
     /* A CP-70 in a ballad: pickups a third up, a slow auto-pan, a modest room. */
     { "Electric Grand", "char=0.35 m_noise=0.3 m_body=0.5 m_split=0.2 m_damp=0.3 "
                         "size=0.45 dark=0.5 delay=0.12 speed=0.25" },
+    /* A suitcase tine piano: voiced a little toward bark, the stereo
+     * vibrato slow, a small room. */
+    { "Tine Piano", "char=0.4 m_split=0.1 m_body=0.6 m_noise=0.25 m_damp=0.3 "
+                    "size=0.45 dark=0.5 delay=0.12 speed=0.3" },
+    /* A reed piano turned down in a small room: its own tremolo, the
+     * amplifier just warm. */
+    { "Reed Piano", "char=0.45 m_split=0.08 m_body=0.5 m_noise=0.25 m_damp=0.3 "
+                    "size=0.35 dark=0.55 delay=0.08 speed=0.45 drive=0.15" },
     /* Sugar-plum: felt hammers, a little of the bell, a medium room. */
     { "Celesta", "char=0.4 m_split=0.05 m_body=0.6 m_noise=0.3 m_damp=0.3 "
                  "size=0.55 dark=0.4 delay=0.2" },

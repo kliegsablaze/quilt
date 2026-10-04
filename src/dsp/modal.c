@@ -20,6 +20,10 @@
  *     rods and tines clamped at one end (toy piano, kalimba,
  *     1 : 6.27 : 17.55), plus a resonator (tube, box or frame) on the
  *     fundamental, which the vibraphone's fan opens and closes.
+ *   Tines and reeds
+ *     Cantilevers heard through a pickup, not the air: the modes' sum is
+ *     the tine's or reed's swing, and a magnetic or electrostatic curve on
+ *     it, differentiated, is the sound (pickup() below).
  *
  * Both are driven by contact.c's force, so velocity and SOFT shape the tone
  * through the physics of the felt, not through a filter.
@@ -39,8 +43,12 @@ typedef enum { MK_STRING, MK_BAR } modal_kind_t;
 /* What each instrument's CHAR does (DESIGN.md, The thirty-eight instruments). */
 typedef enum {
     CH_FELT, CH_HUSH, CH_BLOOM, CH_TWANG,                    /* strings */
-    CH_MOTOR, CH_ROLL, CH_BELL, CH_BUZZ, CH_MUTE, CH_MINOR, CH_RING   /* bars */
+    CH_MOTOR, CH_ROLL, CH_BELL, CH_BUZZ, CH_MUTE, CH_MINOR, CH_RING,  /* bars */
+    CH_BARK, CH_BITE                                         /* tines and reeds, by pickup */
 } char_kind_t;
+
+/* What hears the ringing: the air, or a pickup beside a tine or reed. */
+typedef enum { PU_NONE, PU_MAGNET, PU_CAP } pickup_t;
 
 typedef struct {
     const char *name;
@@ -68,6 +76,8 @@ typedef struct {
     float mass, K, p, kb, r;           /* mallet and bar point */
     float soft_comp;                   /* level given back as SOFT softens: tubes, bells */
     int dampers;              /* vibraphone, celesta, chimes: dampers on the pedal */
+    pickup_t pickup;          /* tine and reed pianos */
+    float pu_drive;           /* the swing at full velocity, in pickup gaps */
     /* both */
     char_kind_t ch;
     float transpose;          /* semitones above the key, as the parts are written */
@@ -146,6 +156,20 @@ static const float TNG_AMP[] = { 1.0f, 0.4f, 0.35f, 0.15f };
 static const float TNG_T60[] = { 1.0f, 0.4f, 0.15f, 0.5f };
 static const unsigned char TNG_TAG[] = { 0, 1, 0, 1 };
 
+/* Tine piano: a tine clamped at one end, the tonebar beside it as the other
+ * prong of an asymmetric fork. Gabrielli et al. measured a strong, quickly
+ * dying partial near seven times the fundamental, the "tink" of the attack,
+ * and a fainter one higher still. The tonebar is the resonator on f0. */
+static const float TIN_RATIO[] = { 1.0f, 7.1f, 18.6f };
+static const float TIN_AMP[] = { 1.0f, 0.05f, 0.012f };
+static const float TIN_T60[] = { 1.0f, 0.06f, 0.03f };
+
+/* Reed piano: a flat steel reed with a blob of solder at its tip, which
+ * pulls its overtones above a plain cantilever's 6.27. Short-lived. */
+static const float REE_RATIO[] = { 1.0f, 7.3f, 21.0f };
+static const float REE_AMP[] = { 1.0f, 0.06f, 0.015f };
+static const float REE_T60[] = { 1.0f, 0.15f, 0.06f };
+
 #define N(a) ((int)(sizeof(a) / sizeof(a[0])))
 
 static const modal_recipe_t RECIPES[] = {
@@ -157,43 +181,43 @@ static const modal_recipe_t RECIPES[] = {
       .bass_B_mult = 1.0f, .B_mult = 1, .mass_mult = 1, .K_mult = 1, .railsback = 1, .prompt_mult = 1, .split_mult = 1, .wa = 0.18f,
       .damper_top = 88, .ch = CH_HUSH, .pan_spread = 0.6f,
       .thump_hz = 600, .thump_ms = 12, .thump_gain = 1.3f },
-    { .name = "Vibraphone", .kind = MK_BAR, .gain = 0.45f,
+    { .name = "Vibraphone", .kind = MK_BAR, .gain = 0.43f,
       .ratio = VIB_RATIO, .amp = VIB_AMP, .t60r = VIB_T60, .nmodes = N(VIB_RATIO),
       .t60_ref = 7.0f, .f_ref = 349.0f, .t60_slope = 0.6f,
       .mass = 0.003f, .K = 2e9f, .p = 2.3f, .kb = 4e5f, .r = 40.0f,
       .dampers = 1, .ch = CH_MOTOR, .pan_spread = 0.5f,
-      .thump_hz = 2500, .thump_ms = 3, .thump_gain = 2.5f },
-    { .name = "Marimba", .kind = MK_BAR, .gain = 0.63f,
+      .thump_hz = 2500, .thump_ms = 3, .thump_gain = 2.39f },
+    { .name = "Marimba", .kind = MK_BAR, .gain = 0.616f,
       .ratio = MAR_RATIO, .amp = MAR_AMP, .t60r = MAR_T60, .nmodes = N(MAR_RATIO),
       .t60_ref = 1.3f, .f_ref = 261.6f, .t60_slope = 0.7f,
       .mass = 0.004f, .K = 8e8f, .p = 2.3f, .kb = 3e5f, .r = 40.0f,
       .ch = CH_ROLL, .pan_spread = 0.6f,
-      .thump_hz = 1800, .thump_ms = 4, .thump_gain = 3.66f },
+      .thump_hz = 1800, .thump_ms = 4, .thump_gain = 3.83f },
     /* Short, stiff strings heard through piezo pickups at the bridge, no
      * soundboard (the Yamaha CP-70). */
-    { .name = "Electric Grand", .kind = MK_STRING, .gain = 0.53f, .decay_mult = 1.1f,
-      .bass_B_mult = 4.0f, .B_mult = 1.5f, .mass_mult = 1, .K_mult = 1.0f, .railsback = 1, .prompt_mult = 0.4f, .split_mult = 1, .wa = 0.18f,
+    { .name = "Electric Grand", .kind = MK_STRING, .gain = 0.623f, .decay_mult = 1.1f,
+      .bass_B_mult = 4.0f, .B_mult = 1.5f, .mass_mult = 0.7f, .K_mult = 0.3f, .railsback = 1, .prompt_mult = 0.4f, .split_mult = 1, .wa = 0.18f,
       .damper_top = 88, .ch = CH_TWANG, .pan_spread = 0.5f,
-      .thump_hz = 800, .thump_ms = 10, .thump_gain = 2.04f },
+      .thump_hz = 800, .thump_ms = 10, .thump_gain = 2.4f },
     /* Light beaters, felt on one face, on thin wire courses with no dampers. */
-    { .name = "Hammered Dulcimer", .kind = MK_STRING, .gain = 0.56f, .decay_mult = 1.2f,
+    { .name = "Hammered Dulcimer", .kind = MK_STRING, .gain = 0.535f, .decay_mult = 1.2f,
       .bass_B_mult = 1.0f, .B_mult = 0.7f, .mass_mult = 0.5f, .K_mult = 1.0f, .railsback = 0, .prompt_mult = 0.3f, .split_mult = 2.0f, .wa = 0.4f,
       .damper_top = 0, .ch = CH_BLOOM, .pan_spread = 0.6f,
-      .thump_hz = 1500, .thump_ms = 4, .thump_gain = 2.04f },
+      .thump_hz = 1500, .thump_ms = 4, .thump_gain = 1.95f },
     /* Felt hammers through a keyboard action, with dampers; an octave up. */
-    { .name = "Celesta", .kind = MK_BAR, .gain = 0.48f,
+    { .name = "Celesta", .kind = MK_BAR, .gain = 0.469f,
       .ratio = CEL_RATIO, .amp = CEL_AMP, .t60r = CEL_T60, .nmodes = N(CEL_RATIO),
       .t60_ref = 3.0f, .f_ref = 523.3f, .t60_slope = 0.6f,
       .mass = 0.003f, .K = 3e10f, .p = 2.7f, .kb = 8e5f, .r = 40.0f,
       .dampers = 1, .ch = CH_BELL, .transpose = 12, .pan_spread = 0.5f,
-      .thump_hz = 900, .thump_ms = 10, .thump_gain = 2.56f },
+      .thump_hz = 900, .thump_ms = 10, .thump_gain = 2.5f },
     /* Small hammers on rods, no dampers; an octave up. */
-    { .name = "Toy Piano", .kind = MK_BAR, .gain = 1.39f,
+    { .name = "Toy Piano", .kind = MK_BAR, .gain = 1.21f,
       .ratio = TOY_RATIO, .amp = TOY_AMP, .t60r = TOY_T60, .nmodes = N(TOY_RATIO),
       .t60_ref = 1.6f, .f_ref = 523.3f, .t60_slope = 0.5f,
       .mass = 0.0015f, .K = 2e10f, .p = 2.3f, .kb = 6e5f, .r = 40.0f,
       .ch = CH_BELL, .transpose = 12, .pan_spread = 0.4f,
-      .thump_hz = 1200, .thump_ms = 6, .thump_gain = 6.95f },
+      .thump_hz = 1200, .thump_ms = 6, .thump_gain = 6.05f },
     /* Yarn or rubber mallets instead of hard plastic; an octave up. */
     { .name = "Xylophone", .kind = MK_BAR, .gain = 0.81f,
       .ratio = XYL_RATIO, .amp = XYL_AMP, .t60r = XYL_T60, .nmodes = N(XYL_RATIO),
@@ -202,33 +226,33 @@ static const modal_recipe_t RECIPES[] = {
       .ch = CH_ROLL, .transpose = 12, .pan_spread = 0.6f,
       .thump_hz = 2000, .thump_ms = 3, .thump_gain = 4.86f },
     /* Brass mallets wrapped soft, no dampers; two octaves up. */
-    { .name = "Glockenspiel", .kind = MK_BAR, .gain = 0.61f,
+    { .name = "Glockenspiel", .kind = MK_BAR, .gain = 0.556f,
       .ratio = GLK_RATIO, .amp = GLK_AMP, .t60r = GLK_T60, .nmodes = N(GLK_RATIO),
       .t60_ref = 6.0f, .f_ref = 1046.5f, .t60_slope = 0.5f,
       .mass = 0.002f, .K = 6e9f, .p = 2.3f, .kb = 1e6f, .r = 40.0f,
       .ch = CH_BELL, .transpose = 24, .pan_spread = 0.4f,
-      .thump_hz = 3000, .thump_ms = 2, .thump_gain = 2.8f },
+      .thump_hz = 3000, .thump_ms = 2, .thump_gain = 2.73f },
     /* The thumb: heavier and softer than a mallet, so the pluck is round. */
-    { .name = "Kalimba / Music Box", .kind = MK_BAR, .gain = 0.62f,
+    { .name = "Kalimba / Music Box", .kind = MK_BAR, .gain = 0.585f,
       .ratio = KAL_RATIO, .amp = KAL_AMP, .t60r = KAL_T60, .nmodes = N(KAL_RATIO),
       .t60_ref = 2.5f, .f_ref = 523.3f, .t60_slope = 0.5f,
       .mass = 0.003f, .K = 6e9f, .p = 2.3f, .kb = 5e5f, .r = 40.0f,
       .ch = CH_BUZZ, .pan_spread = 0.5f,
-      .thump_hz = 400, .thump_ms = 8, .thump_gain = 4.7f },
+      .thump_hz = 400, .thump_ms = 8, .thump_gain = 4.44f },
     /* Rawhide hammers on brass tubes, with a damper pedal. */
-    { .name = "Tubular Bells", .kind = MK_BAR, .gain = 0.227f,
+    { .name = "Tubular Bells", .kind = MK_BAR, .gain = 0.219f,
       .ratio = TUB_RATIO, .amp = TUB_AMP, .t60r = TUB_T60, .tag = TUB_TAG, .nmodes = N(TUB_RATIO),
       .t60_ref = 8.0f, .f_ref = 261.6f, .t60_slope = 0.5f,
       .mass = 0.01f, .K = 2e10f, .p = 2.85f, .kb = 2e6f, .r = 40.0f,
       .soft_comp = 0.2f, .dampers = 1, .ch = CH_MUTE, .pan_spread = 0.4f,
-      .thump_hz = 1500, .thump_ms = 3, .thump_gain = 5.0f },
+      .thump_hz = 1500, .thump_ms = 3, .thump_gain = 4.83f },
     /* Bronze bells, a leather clapper; an octave up. */
-    { .name = "Handbells", .kind = MK_BAR, .gain = 0.255f,
+    { .name = "Handbells", .kind = MK_BAR, .gain = 0.249f,
       .ratio = HBL_RATIO, .amp = HBL_AMP, .t60r = HBL_T60, .tag = HBL_TAG, .nmodes = N(HBL_RATIO),
       .t60_ref = 6.0f, .f_ref = 523.3f, .t60_slope = 0.5f,
       .mass = 0.005f, .K = 1.6e10f, .p = 2.85f, .kb = 1.5e6f, .r = 40.0f,
       .soft_comp = 0.15f, .ch = CH_MINOR, .transpose = 12, .pan_spread = 0.5f,
-      .thump_hz = 2000, .thump_ms = 2, .thump_gain = 4.0f },
+      .thump_hz = 2000, .thump_ms = 2, .thump_gain = 3.91f },
     /* Fingers on hammered steel, over the shell's air. */
     { .name = "Handpan", .kind = MK_BAR, .gain = 0.24f,
       .ratio = HPN_RATIO, .amp = HPN_AMP, .t60r = HPN_T60, .tag = HPN_TAG, .nmodes = N(HPN_RATIO),
@@ -237,12 +261,26 @@ static const modal_recipe_t RECIPES[] = {
       .ch = CH_RING, .pan_spread = 0.5f,
       .thump_hz = 300, .thump_ms = 6, .thump_gain = 7.5f },
     /* Rubber mallets on steel tongues over a box. */
-    { .name = "Tongue Drum", .kind = MK_BAR, .gain = 0.35f,
+    { .name = "Tongue Drum", .kind = MK_BAR, .gain = 0.334f,
       .ratio = TNG_RATIO, .amp = TNG_AMP, .t60r = TNG_T60, .tag = TNG_TAG, .nmodes = N(TNG_RATIO),
       .cavity_hz = 140.0f, .t60_ref = 2.5f, .f_ref = 261.6f, .t60_slope = 0.5f,
       .mass = 0.006f, .K = 3.8e10f, .p = 2.9f, .kb = 5e5f, .r = 40.0f,
       .ch = CH_RING, .pan_spread = 0.5f,
-      .thump_hz = 500, .thump_ms = 5, .thump_gain = 6.2f },
+      .thump_hz = 500, .thump_ms = 5, .thump_gain = 5.92f },
+    /* Neoprene-tipped hammers on tines, heard through a magnetic pickup. */
+    { .name = "Tine Piano", .kind = MK_BAR, .gain = 0.444f,
+      .ratio = TIN_RATIO, .amp = TIN_AMP, .t60r = TIN_T60, .nmodes = N(TIN_RATIO),
+      .t60_ref = 7.0f, .f_ref = 261.6f, .t60_slope = 0.8f,
+      .mass = 0.004f, .K = 4e9f, .p = 2.5f, .kb = 5e5f, .r = 40.0f,
+      .dampers = 1, .pickup = PU_MAGNET, .pu_drive = 0.8f, .ch = CH_BARK, .pan_spread = 0.3f,
+      .thump_hz = 700, .thump_ms = 6, .thump_gain = 4.06f },
+    /* Felt hammers on reeds, heard through an electrostatic pickup. */
+    { .name = "Reed Piano", .kind = MK_BAR, .gain = 0.5f,
+      .ratio = REE_RATIO, .amp = REE_AMP, .t60r = REE_T60, .nmodes = N(REE_RATIO),
+      .t60_ref = 3.5f, .f_ref = 261.6f, .t60_slope = 0.7f,
+      .mass = 0.003f, .K = 6e9f, .p = 2.5f, .kb = 8e5f, .r = 40.0f,
+      .dampers = 1, .pickup = PU_CAP, .pu_drive = 0.7f, .ch = CH_BITE, .pan_spread = 0.2f,
+      .thump_hz = 900, .thump_ms = 5, .thump_gain = 6.52f },
 };
 
 static const modal_recipe_t *recipe_for(int inst) {
@@ -354,6 +392,26 @@ static void strike(quilt_t *q, voice_t *v, const modal_recipe_t *r, float v0) {
     /* The knock of the action or the mallet, heard and felt through the body. */
     m->thump_env = 1.0f;
     m->thump_a = r->thump_gain * 0.133f * v0 * noise_level(q, v->inst);
+}
+
+/* What a pickup gives for a swing u, in gaps, about its rest point; its
+ * slope at rest is 1, so the gap changes the tone, not the quiet level.
+ *   Magnet (the tine piano): the flux through the coil falls off as
+ *     1 / (1 + s^2) with the tine's offset s from the pole, the tine resting
+ *     a little to one side, so it hears both halves of the swing unequally;
+ *     swung hard, past the pole, the flux folds back: the bark.
+ *   Capacitor (the reed piano): the reed and a charged plate, the charge
+ *     rising as 1 / (1 - u/gap) when the reed swings in, hardly falling
+ *     when it swings out: the bite (Pfeifle). Kept short of touching. */
+static float pickup(pickup_t kind, float u, float gap) {
+    if (kind == PU_MAGNET) {
+        const float s0 = -0.4f, phi0 = 1.0f / (1.0f + s0 * s0);
+        float s = u / gap + s0;
+        return (1.0f / (1.0f + s * s) - phi0) * gap * (1.0f + s0 * s0) * (1.0f + s0 * s0) / (-2.0f * s0);
+    }
+    float x = u / gap;
+    if (x > 0.5f) x = 0.5f + 0.4f * tanhf((x - 0.5f) / 0.4f);
+    return gap * x / (1.0f - x);
 }
 
 static uint32_t xorshift(uint32_t *s) {
@@ -482,6 +540,20 @@ void modal_note_on(quilt_t *q, voice_t *v, int granted) {
         a[2] = r->p;
         a[3] = 3e-5f;
         a[4] = r->kb * fminf(30.0f, fmaxf(0.1f, powf(reg, 1.5f)));
+        if (r->pickup != PU_NONE) {
+            /* The tine's swing in pickup gaps: a blow passes about 1.5 m v0
+             * of momentum, which the fundamental takes up as g0 per newton
+             * each sample, so full velocity swings it about pu_drive gaps
+             * wherever it is on the keyboard. The pickup hears the speed,
+             * which rises with pitch; dividing by w0 keeps the fundamental
+             * level across the keys and leaves the overtones their edge.
+             * Above C6 the tines and reeds are short and swing less, as on
+             * the instruments, which keeps the folded harmonics clear of
+             * the top of the band. */
+            m->pu_norm = r->pu_drive / (g0 * r->mass * 1.5f * 3.5f * QUILT_SR * 1.45f) *
+                         fminf(1.0f, powf(1046.5f / f0, 1.5f));
+            m->pu_comp = 1.0f / (2.0f * sinf(PI * f0 / QUILT_SR));
+        }
 
         /* The tube: resonance on the fundamental, first, so the fan can move it. */
         float sigma1 = 6.91f / t60_1;
@@ -653,9 +725,18 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
     const float td = expf(-1.0f / (r->thump_ms * 0.001f * QUILT_SR));
     const float buzz_a = r->ch == CH_BUZZ && q->charv[v->inst] > 0.02f ? 3.0f * q->charv[v->inst] : 0.0f;
     const float hd = expf(-1.0f / (0.03f * QUILT_SR));
+    /* The pickup's gap: BARK and BITE bring the tine or reed nearer. */
+    const float gap = r->pickup == PU_MAGNET ? 1.3f - 0.75f * q->charv[v->inst]
+                                             : 1.7f - 1.15f * q->charv[v->inst];
     float peak = 0.0f;
     for (int n = 0; n < frames; n++) {
-        float y = (acc[n][0] + acc[n][1] + acc[n][2] + acc[n][3]) * m->level;
+        float y = acc[n][0] + acc[n][1] + acc[n][2] + acc[n][3];
+        if (r->pickup != PU_NONE) {
+            float o = pickup(r->pickup, y * m->pu_norm, gap);
+            y = (o - m->pu_prev) * m->pu_comp;
+            m->pu_prev = o;
+        }
+        y *= m->level;
         float knock = 0.0f;
         if (m->thump_env > 1e-4f) {
             m->thump_lp += (noise(&m->rng) - m->thump_lp) * m->thump_k;

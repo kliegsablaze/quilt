@@ -739,6 +739,20 @@ static void audible(void) {
         d = turn("Electric Grand", 60, 90, 8192 + 441, -1, "volume=0", "c_electric_grand", m_partial, &a0, &a1);
         CHECK(d > 8, "Electric Grand TWANG: the overtones at least 8 dB forward (%.1f -> %.1f dB)", a0, a1);
     }
+    /* BARK and BITE: the tine or reed nearer its pickup, so a firm note
+     * folds over into its second harmonic, at about the same level. */
+    {
+        const char *pus[] = { "Tine Piano", "Reed Piano" }, *pkeys[] = { "c_tine_piano", "c_reed_piano" };
+        const char *what[] = { "BARK", "BITE" };
+        for (int k = 0; k < 2; k++) {
+            cur_f0 = quilt_note_freq(quilt_instrument_by_name(pus[k]), 60);
+            cur_ratio = 2;
+            d = turn(pus[k], 60, 100, 8192 + 441, -1, "volume=0;m_split=0", pkeys[k], m_partial, &a0, &a1);
+            CHECK(d > 10, "%s %s: the second harmonic at least 10 dB up (%.1f -> %.1f dB)", pus[k], what[k], a0, a1);
+            d = turn(pus[k], 60, 100, 22050, -1, "volume=0", pkeys[k], m_level, &a0, &a1);
+            CHECK(fabs(d) < 6, "%s %s: changes the tone more than the level (%+.1f dB)", pus[k], what[k], d);
+        }
+    }
 
     /* BELL: the upper modes come up. */
     const char *bells[] = { "Celesta", "Toy Piano", "Glockenspiel" };
@@ -820,10 +834,10 @@ static void effects(void) {
     double big = wet_rms(44100 * 2, 4410);
     CHECK(big > small + 20, "SIZE: the room rings at least 20 dB longer (%.1f -> %.1f dB at 2 s)", small, big);
 
-    /* Heard on a bright source: a hard piano with no strip. */
-    plate_only("Felt Upright", "dark=0;size=0.7;soft=0;c_felt_upright=0");
+    /* Heard on a bright source: the electric grand, hard, pickups full up. */
+    plate_only("Electric Grand", "dark=0;size=0.7;soft=0;c_electric_grand=1");
     double open = wet_bright(44100, 22050);
-    plate_only("Felt Upright", "dark=1;size=0.7;soft=0;c_felt_upright=0");
+    plate_only("Electric Grand", "dark=1;size=0.7;soft=0;c_electric_grand=1");
     double dark = wet_bright(44100, 22050);
     CHECK(dark < open - 6, "DARK: the tail at least 6 dB darker (%.1f -> %.1f dB)", open, dark);
 
@@ -909,6 +923,31 @@ static void cost(void) {
     A->destroy_instance(p);
 }
 
+/* Every key of every instrument, struck as hard as it goes with the hardest
+ * felt, then the softest: each sounds, and none rings up toward full scale.
+ * The felt's stiffness once outran the contact's explicit step on the
+ * thinnest strings and stiffest bars and blew up (DESIGN.md, Contact). */
+static void stable(void) {
+    int bad = 0;
+    char what[96] = "";
+    for (int t = 0; t < QUILT_NTYPES; t++)
+        for (int key = 21; key <= 108; key++)
+            for (int s = 0; s < 2; s++) {
+                void *p = A->create_instance(".", "");
+                A->set_param(p, "type", TYPES[t]);
+                A->set_param(p, "soft", s ? "1" : "0");
+                A->set_param(p, "m_noise", "0");
+                midi3(p, 0x90, key, 127);
+                int peak = 0;
+                double r = rms(p, 40, &peak);
+                if (peak > 24000 || !(r > 0.0)) {
+                    if (!bad++) snprintf(what, sizeof(what), "%s key %d soft %d: peak %d", TYPES[t], key, s, peak);
+                }
+                A->destroy_instance(p);
+            }
+    CHECK(!bad, "every key sounds and none rings up toward full scale (%d bad; first %s)", bad, what);
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     A = move_plugin_init_v2(NULL);
@@ -932,6 +971,7 @@ int main(int argc, char **argv) {
     motor();
     roll();
     budget();
+    stable();
     reverb();
     audible();
     effects();

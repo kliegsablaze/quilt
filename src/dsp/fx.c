@@ -5,8 +5,9 @@
  *                board's broad resonances, mixed back in. (The commuted
  *                soundboard excitation of Smith & Van Duyne is a later
  *                refinement; this is its linear, shared half.)
- *   tremolo      SWAY's auto-pan, at SPEED, for the instruments whose SWAY
- *                is a tremolo (on the vibraphone it is the fan, in modal.c).
+ *   tremolo      SWAY's auto-pan, at SPEED, for the instruments whose SWAY is
+ *                a tremolo (on the vibraphone it is the fan, in modal.c). The
+ *                reed piano's is in one channel, as its amplifier's is.
  *   drive        DRIVE: gentle saturation, transparent when quiet.
  *   plate        Dattorro's plate (JAES 1997), SPACE as its send; SIZE its
  *                decay, DARK its damping, DELAY its pre-delay.
@@ -160,6 +161,7 @@ void fx_process(quilt_t *q, float *left, float *right, float *board, int frames)
     const float sway0 = q->gs_prev[G_SWAY], sway1 = q->gs[G_SWAY];
     const float inc = TWO_PI * (0.5f + 7.5f * q->gs[G_SPEED]) / QUILT_SR;
     const int trem = quilt_sway_is_tremolo(q->type) && (sway0 > 0.0f || sway1 > 0.0f);
+    const int pan = quilt_sway_is_pan(q->type);
     for (int n = 0; n < frames; n++) {
         q->lfo += inc;
         if (q->lfo > TWO_PI) q->lfo -= TWO_PI;
@@ -167,7 +169,7 @@ void fx_process(quilt_t *q, float *left, float *right, float *board, int frames)
             float sway = sway0 + (sway1 - sway0) * (float)(n + 1) * step;
             float s = 0.5f * sinf(q->lfo);
             left[n] *= 1.0f - sway * (0.5f + s);
-            right[n] *= 1.0f - sway * (0.5f - s);
+            right[n] *= 1.0f - sway * (0.5f + (pan ? -s : s));
         }
     }
 
