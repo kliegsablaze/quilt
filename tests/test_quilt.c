@@ -99,7 +99,7 @@ static void types(void *p) {
     int offered = 0;
     for (int i = 0; i < QUILT_NINST; i++) {
         int t = quilt_type_index(i);
-        CHECK((t >= 0) == modal_supports(i), "%s is offered if and only if its engine is built",
+        CHECK((t >= 0) == quilt_built(i), "%s is offered if and only if its engine is built",
               QUILT_INST[i].name);
         if (t < 0) continue;
         offered++;
@@ -133,13 +133,15 @@ static void presets(void *p) {
 
 /* Turning TYPE brings the instrument's whole default sound, on every page,
  * the same as its factory preset; only VOL is left as it was. */
+static shape_t shape_of(const char *slug) { return QUILT_INST[quilt_instrument_by_slug(slug, (int)strlen(slug))].shape; }
 static void dirty(void *p, const char *slug) {
     char k[64];
+    const shape_t sh = shape_of(slug);
     for (int g = 0; g < G_COUNT; g++)
         if (g != G_VOLUME) A->set_param(p, QUILT_GLOBALS[g].key, "0.01");
     snprintf(k, sizeof(k), "c_%s", slug);
     A->set_param(p, k, "0.99");
-    for (int i = 0; i < quilt_shape_key_count(SH_MODAL); i++) A->set_param(p, quilt_shape_param(SH_MODAL, i)->key, "0.97");
+    for (int i = 0; i < quilt_shape_key_count(sh); i++) A->set_param(p, quilt_shape_param(sh, i)->key, "0.97");
     A->set_param(p, "volume", "-12");
 }
 static int same_sound(void *p, void *ref, const char *slug) {
@@ -149,8 +151,9 @@ static int same_sound(void *p, void *ref, const char *slug) {
         if (g != G_VOLUME) ok &= fabs(num(p, QUILT_GLOBALS[g].key) - num(ref, QUILT_GLOBALS[g].key)) < 1e-4;
     snprintf(k, sizeof(k), "c_%s", slug);
     ok &= fabs(num(p, k) - num(ref, k)) < 1e-4;
-    for (int i = 0; i < quilt_shape_key_count(SH_MODAL); i++) {
-        const char *key = quilt_shape_param(SH_MODAL, i)->key;
+    const shape_t sh = shape_of(slug);
+    for (int i = 0; i < quilt_shape_key_count(sh); i++) {
+        const char *key = quilt_shape_param(sh, i)->key;
         ok &= fabs(num(p, key) - num(ref, key)) < 1e-4;
     }
     return ok;
@@ -172,7 +175,8 @@ static void voicings(void *p) {
         CHECK(is(p, "preset_name", QUILT_TYPE_NAMES[t]), "and names its preset");
         dirty(p, slug);
         A->set_param(p, "type", QUILT_TYPE_NAMES[t]);
-        CHECK(fabs(num(p, "m_spot") - 0.97) < 1e-4 && fabs(num(p, "soft") - 0.01) < 1e-4,
+        const char *k0 = quilt_shape_param(QUILT_INST[inst].shape, 0)->key;
+        CHECK(fabs(num(p, k0) - 0.97) < 1e-4 && fabs(num(p, "soft") - 0.01) < 1e-4,
               "writing %s again keeps what was turned", QUILT_TYPE_NAMES[t]);
         A->destroy_instance(ref);
     }
@@ -415,7 +419,11 @@ static void softness(void) {
         p = note(types[i], 60, 120, 8192, -1, "volume=0;c_felt_upright=0;c_kalimba_music_box=0;c_hammered_dulcimer=0");
         double hard = centroid();
         A->destroy_instance(p);
-        CHECK(soft < hard * 0.9, "%s: soft strike darker (%.0f Hz) than hard (%.0f Hz)", types[i], soft, hard);
+        if (banks_supports(quilt_type_inst(i)))
+            CHECK(fabs(soft - hard) < 1, "%s: has no touch, so velocity leaves the tone alone (%.0f Hz, %.0f Hz)",
+                  types[i], soft, hard);
+        else
+            CHECK(soft < hard * 0.9, "%s: soft strike darker (%.0f Hz) than hard (%.0f Hz)", types[i], soft, hard);
         p = note(types[i], 60, 90, 8192, -1, "soft=0.95;volume=0;c_kalimba_music_box=0");
         double felt = centroid();
         A->destroy_instance(p);
@@ -625,6 +633,7 @@ static void audible(void) {
     for (int i = 0; i < QUILT_NTYPES; i++) {
         const char *t = TYPES[i];
         const int inst = quilt_instrument_by_name(t);
+        if (QUILT_INST[inst].shape != SH_MODAL) continue;   /* see machines() */
         /* A bar is measured from its first mode (on a tubular bell, mode 4,
          * not the strike note), against its second; a string, its fourth
          * partial against its first. */
@@ -679,6 +688,7 @@ static void audible(void) {
     /* NOISE: the knock of the action against the note, in the first 50 ms. */
     for (int i = 0; i < QUILT_NTYPES; i++) {
         static float quiet[2205];
+        if (QUILT_INST[quilt_type_inst(i)].shape != SH_MODAL) continue;
         void *p = note(TYPES[i], 60, 90, 2304, -1, "volume=0;m_noise=0");
         memcpy(quiet, wave, sizeof(quiet));
         double sig = rms_at(0, 2205);
@@ -794,6 +804,199 @@ static void audible(void) {
     cur_ratio = 3;
     d = turn("Vibraphone", 60, 110, 8192 + 441, -1, "volume=0;soft=0.9", "drive", m_partial, &a0, &a1);
     CHECK(d > 15, "DRIVE: adds at least 15 dB of harmonics (%.1f -> %.1f dB)", a0, a1);
+}
+
+/* ---- the organs, the string machine and the FM piano: every knob heard ---- */
+
+static double m_onset(void) { return db(rms_at(441, 1323)) - db(rms_at(17640, 4410)); }
+static double m_late(void) { return part_db(26460, 8192, cur_f0 * cur_ratio); }
+static double m_leak(void) { return part_db(2000, 16384, cur_f0 * cur_ratio) - part_db(2000, 16384, cur_f0); }
+static double m_abs(void) { return part_db(441, 8192, cur_f0 * cur_ratio); }
+static double m_line(void) { return db(mag(22050, 44100, cur_f0 * cur_ratio)) - db(rms_at(22050, 44100)); }
+
+/* The rate of the strongest swing in a note's level, 0.3 to 12 Hz. */
+static double rate(int a, int seconds) {
+    int frames = seconds * 200;
+    static double env[2400];
+    double mean = 0;
+    for (int i = 0; i < frames; i++) { env[i] = log(rms_at(a + i * 220, 220) + 1e-9); mean += env[i]; }
+    mean /= frames;
+    double best = 0, bm = -1;
+    for (double f = 0.3; f <= 12; f += 0.05) {
+        double re = 0, im = 0;
+        for (int i = 0; i < frames; i++) { re += (env[i] - mean) * cos(2 * PI_D * f * i / 200); im += (env[i] - mean) * sin(2 * PI_D * f * i / 200); }
+        if (re * re + im * im > bm) { bm = re * re + im * im; best = f; }
+    }
+    return best;
+}
+static double m_rate(void) { return rate(44100, 4); }
+
+/* What `knob` adds in the first 50 ms, against the note: as NOISE is measured. */
+static double burst(const char *type, const char *extra, const char *knob) {
+    static float quiet[2205];
+    char e[200];
+    snprintf(e, sizeof(e), "%s;%s=0", extra, knob);
+    void *p = note(type, 60, 90, 2304, -1, e);
+    memcpy(quiet, wave, sizeof(quiet));
+    double sig = rms_at(0, 2205);
+    A->destroy_instance(p);
+    snprintf(e, sizeof(e), "%s;%s=1", extra, knob);
+    p = note(type, 60, 90, 2304, -1, e);
+    double acc = 0;
+    for (int k = 0; k < 2205; k++) acc += (wave[k] - quiet[k]) * (wave[k] - quiet[k]);
+    A->destroy_instance(p);
+    return db(sqrt(acc / 2205)) - db(sig);
+}
+
+/* One harmonic of a held note, with a drawbar in and out. */
+static double drawbar(const char *key, double harm) {
+    double at[2];
+    for (int e = 0; e < 2; e++) {
+        char x[200];
+        snprintf(x, sizeof(x), "volume=0;o_8=0;o_4=0;c_tonewheel_organ=0;o_leak=0;%s=%d", key, e ? 8 : 0);
+        void *p = note("Tonewheel Organ", 60, 100, 8192 + 441, -1, x);
+        at[e] = part_db(441, 8192, 261.6 * harm);
+        A->destroy_instance(p);
+    }
+    return at[1] - at[0];
+}
+
+static void machines(void) {
+    double a0, a1, d;
+    const double f0 = 261.63;
+    cur_f0 = f0;
+
+    /* Tonewheel Organ, 00 8800 000 unless said. */
+    {
+        const char *t = "Tonewheel Organ", *base = "volume=0;c_tonewheel_organ=0;o_leak=0";
+        char x[200];
+        cur_ratio = 2;
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "soft", m_partial, &a0, &a1);
+        CHECK(d < -12, "%s SOFT: the 4' falls at least 12 dB against the 8' (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 22050, -1, base, "soft", m_level, &a0, &a1);
+        CHECK(fabs(d) < 10, "%s SOFT: changes the tone more than the level (%+.1f dB)", t, d);
+        d = turn(t, 60, 100, 44100, 22050, base, "decay", m_release, &a0, &a1);
+        CHECK(d > 20, "%s DECAY: a released note sounds at least 20 dB longer (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "tone", m_partial, &a0, &a1);
+        CHECK(d > 4, "%s TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 44100 * 5, -1, base, "sway", m_rate, &a0, &a1);
+        CHECK(a0 < 2 && a1 > 5, "%s SWAY: the Leslie from slow to fast (%.1f -> %.1f Hz)", t, a0, a1);
+        snprintf(x, sizeof(x), "volume=0;o_leak=0;sway=0;o_slow=1");
+        d = turn(t, 60, 100, 44100 * 3, -1, x, "c_tonewheel_organ", m_wobble, &a0, &a1);
+        CHECK(a1 > a0 + 3, "%s LUSH: the scanner chorus moves the note (%.1f -> %.1f dB)", t, a0, a1);
+        cur_ratio = 3;
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "o_ping", m_partial, &a0, &a1);
+        CHECK(d > 12, "%s PING: the percussion's third harmonic at least 12 dB up (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 44100, -1, "volume=0;c_tonewheel_organ=0;o_leak=0;o_ping=1", "o_tail", m_late, &a0, &a1);
+        CHECK(d > 12, "%s TAIL: the percussion rings at least 12 dB longer (%.1f -> %.1f dB at 0.6 s)", t, a0, a1);
+        d = burst(t, base, "o_click");
+        CHECK(d > -14, "%s CLICK: the key click is heard, %.1f dB against the note", t, d);
+        cur_ratio = pow(2, 1 / 12.0);
+        d = turn(t, 60, 100, 16384 + 2048, -1, "volume=0;c_tonewheel_organ=0;o_4=0", "o_leak", m_leak, &a0, &a1);
+        CHECK(d > 12, "%s LEAK: the next wheel bleeds in at least 12 dB more (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 44100 * 5, -1, "volume=0;c_tonewheel_organ=0;o_leak=0;sway=0", "o_slow", m_rate, &a0, &a1);
+        CHECK(a1 > a0 * 2, "%s SLOW: the slow rotor speed at least doubles (%.2f -> %.2f Hz)", t, a0, a1);
+        d = turn(t, 60, 100, 44100 * 5, -1, "volume=0;c_tonewheel_organ=0;o_leak=0;sway=1", "o_fast", m_rate, &a0, &a1);
+        CHECK(a1 > a0 * 1.4, "%s FAST: the fast rotor speed at least 40 %% up (%.2f -> %.2f Hz)", t, a0, a1);
+        static const char *bars[9] = { "o_16", "o_513", "o_8", "o_4", "o_223", "o_2", "o_135", "o_113", "o_1" };
+        static const double harm[9] = { 0.5, 1.5, 1, 2, 3, 4, 5, 6, 8 };
+        for (int b = 0; b < 9; b++) {
+            d = drawbar(bars[b], harm[b]);
+            CHECK(d > 12, "%s %s: its harmonic at least 12 dB up (%+.1f dB)", t, bars[b], d);
+        }
+    }
+
+    /* Flute Organ. */
+    {
+        const char *t = "Flute Organ", *base = "volume=0;c_flute_organ=0;k_4=0";
+        cur_ratio = 3;
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "soft", m_partial, &a0, &a1);
+        CHECK(d < -12, "%s SOFT: the stopped pipe's twelfth falls at least 12 dB (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 22050, -1, base, "soft", m_level, &a0, &a1);
+        CHECK(fabs(d) < 10, "%s SOFT: changes the tone more than the level (%+.1f dB)", t, d);
+        d = turn(t, 60, 100, 44100, 22050, base, "decay", m_release, &a0, &a1);
+        CHECK(d > 20, "%s DECAY: a released note sounds at least 20 dB longer (%.1f -> %.1f dB)", t, a0, a1);
+        cur_ratio = 2;
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "tone", m_partial, &a0, &a1);
+        CHECK(d > 4, "%s TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 44100 * 3, -1, base, "sway", m_wobble, &a0, &a1);
+        CHECK(a1 > 6 && a0 < 1.5, "%s SWAY: the tremulant wobbles the note (%.1f -> %.1f dB)", t, a0, a1);
+        d = burst(t, "volume=0;k_4=0", "c_flute_organ");
+        CHECK(d > -14, "%s PUFF: the chiff is heard, %.1f dB against the note", t, d);
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "k_edge", m_partial, &a0, &a1);
+        CHECK(d > 12, "%s EDGE: opens the stopped pipe, its octave at least 12 dB up (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 22050, -1, base, "k_swell", m_onset, &a0, &a1);
+        CHECK(d < -12, "%s SWELL: the pipe speaks at least 12 dB more slowly (%.1f -> %.1f dB at 30 ms)", t, a0, a1);
+    }
+
+    /* String Ensemble. */
+    {
+        const char *t = "String Ensemble", *base = "volume=0;c_string_ensemble=0";
+        cur_ratio = 4;
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "soft", m_partial, &a0, &a1);
+        CHECK(d < -12, "%s SOFT: the overtones fall at least 12 dB (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 22050, -1, base, "soft", m_level, &a0, &a1);
+        CHECK(fabs(d) < 10, "%s SOFT: changes the tone more than the level (%+.1f dB)", t, d);
+        d = turn(t, 60, 100, 44100, 22050, base, "decay", m_release, &a0, &a1);
+        CHECK(d > 20, "%s DECAY: a released note sounds at least 20 dB longer (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "tone", m_partial, &a0, &a1);
+        CHECK(d / 2 > 4, "%s TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB over 2 octaves)", t, a0, a1);
+        cur_ratio = 4;
+        d = turn(t, 60, 100, 44100 * 2, -1, base, "sway", m_line, &a0, &a1);
+        CHECK(d < -6, "%s SWAY: the vibrato spreads the fourth harmonic at least 6 dB (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 44100 * 3, -1, "volume=0", "c_string_ensemble", m_wobble, &a0, &a1);
+        CHECK(a1 > a0 + 3, "%s LUSH: the ensemble moves the note (%.1f -> %.1f dB)", t, a0, a1);
+        cur_ratio = 8;
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "k_edge", m_partial, &a0, &a1);
+        CHECK(d > 6, "%s EDGE: the presence at 2 kHz at least 6 dB up (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 22050, -1, base, "k_swell", m_onset, &a0, &a1);
+        CHECK(d < -12, "%s SWELL: the strings swell in at least 12 dB more slowly (%.1f -> %.1f dB at 30 ms)", t, a0, a1);
+    }
+
+    /* The registers, each with the others out: its own fundamental comes in. */
+    {
+        const char *mt[2] = { "Flute Organ", "String Ensemble" };
+        const char *rk[3] = { "k_8", "k_4", "k_2" };
+        for (int m = 0; m < 2; m++)
+            for (int r = 0; r < 3; r++) {
+                char x[200];
+                snprintf(x, sizeof(x), "volume=0;k_8=0;k_4=0;k_2=0;c_flute_organ=0;c_string_ensemble=0;k_swell=0");
+                cur_ratio = 1 << r;
+                d = turn(mt[m], 60, 100, 8192 + 441, -1, x, rk[r], m_abs, &a0, &a1);
+                CHECK(d > 12, "%s %s: its register comes in at least 12 dB (%.1f -> %.1f dB)", mt[m], rk[r], a0, a1);
+            }
+    }
+
+    /* Glass E.Piano. */
+    {
+        const char *t = "Glass E.Piano", *base = "volume=0";
+        cur_ratio = 2;
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "soft", m_partial, &a0, &a1);
+        CHECK(d < -12, "%s SOFT: the overtones fall at least 12 dB (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 22050, -1, base, "soft", m_level, &a0, &a1);
+        CHECK(fabs(d) < 10, "%s SOFT: changes the tone more than the level (%+.1f dB)", t, d);
+        d = turn(t, 60, 90, 44100 * 2, -1, base, "decay", m_tail, &a0, &a1);
+        CHECK(d > 12, "%s DECAY: rings at least 12 dB longer (%.1f -> %.1f dB at 1.5 s)", t, a0, a1);
+        d = turn(t, 60, 90, 8192 + 441, -1, base, "tone", m_partial, &a0, &a1);
+        CHECK(d > 4, "%s TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB)", t, a0, a1);
+        cur_ratio = 4;
+        d = turn(t, 60, 100, 8192 + 441, -1, base, "c_glass_e_piano", m_partial, &a0, &a1);
+        CHECK(d > 12, "%s GLASS: the bell pair's sideband at least 12 dB up (%.1f -> %.1f dB)", t, a0, a1);
+        cur_ratio = 13;
+        d = turn(t, 60, 110, 8192 + 441, -1, base, "f_tine", m_partial, &a0, &a1);
+        CHECK(d > 12, "%s TINE: the tink at least 12 dB up (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 90, 44100 * 3, -1, "volume=0;decay=1", "f_split", m_wobble, &a0, &a1);
+        CHECK(a1 > 3 && a1 > a0 + 2, "%s SPLIT: the pairs beat (wobble %.1f -> %.1f dB)", t, a0, a1);
+        /* TUNE: a whole-number ratio rings as a bell, one between as glass. */
+        double at[2];
+        for (int e = 0; e < 2; e++) {
+            void *p = note(t, 60, 100, 8192 + 441, -1, e ? "volume=0;c_glass_e_piano=1;f_tune=0.375" : "volume=0;c_glass_e_piano=1;f_tune=0");
+            at[e] = part_db(441, 8192, f0 * 1.5) - part_db(441, 8192, f0);
+            A->destroy_instance(p);
+        }
+        CHECK(at[1] > at[0] + 12, "%s TUNE: off the whole numbers the bell goes inharmonic, 1.5 f0 at least 12 dB up "
+              "(%.1f -> %.1f dB)", t, at[0], at[1]);
+    }
 }
 
 /* The reverb alone: the same note with and without the plate, subtracted.
@@ -974,6 +1177,7 @@ int main(int argc, char **argv) {
     stable();
     reverb();
     audible();
+    machines();
     effects();
     clicks();
     cost();

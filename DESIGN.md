@@ -7,12 +7,13 @@ request. The first request was "a wider palette, more soft sounds". The second w
 "not just keys: strings, xylophones, whatever; the mother of all modules for soft
 sounds". It has grown from four keyboards to **thirty-eight instruments in five
 families**, built on six engines. **The modal engine is built** (build steps 3
-and 4): seventeen instruments play through it, with the shared effects, measured on
-the Move. They are Felt Upright, Una Corda Grand, Electric Grand, Tine Piano, Reed
-Piano, Celesta, Toy
-Piano, Vibraphone, Marimba, Xylophone, Glockenspiel, Tubular Bells, Handbells,
+and 4), and so are the banks and the FM voice (step 5): twenty-one instruments
+play, with the shared effects, measured on the Move. They are Felt Upright, Una
+Corda Grand, Electric Grand, Tine Piano, Reed Piano, Celesta, Toy
+Piano, Tonewheel Organ, Flute Organ, Glass E.Piano, String Ensemble, Vibraphone,
+Marimba, Xylophone, Glockenspiel, Tubular Bells, Handbells,
 Handpan, Tongue Drum, Kalimba / Music Box and Hammered Dulcimer. The other
-twenty-one instruments have their
+seventeen instruments have their
 pages and labels in place, but **`TYPE` does not offer them until their engine is
 built**, so nothing on the Move is a stand-in. Each instrument arrives with its own
 default sound on every page (see *Every instrument starts beautiful*).
@@ -436,39 +437,99 @@ and kalimba.
 
 ### 5. Banks: always-running generators
 
-The tonewheel organ, flute organ and string machine **cost the same whether one key
-is held or thirty**. Their generators run once and are shared; keys only open
-gates.
+Built 2026-10-04 (`banks.c`). The generators run once and are shared; keys only
+open gates on them. None of these has touch: an organ key is a switch, so
+velocity changes nothing.
 
 - **Tonewheel Organ.**
-  - **Wheels.** 91 sine wheels with Hammond gear-ratio tuning, the low wheels
-    slightly non-sinusoidal.
-  - **Key click** comes from nine contacts closing a fraction of a millisecond
-    apart.
-  - **Percussion** sounds on the 2nd or 3rd harmonic and is single-triggered.
-  - **Leakage** from neighbouring wheels is included (Pekonen, Pihlajamäki &
-    Välimäki).
-  - **Scanner vibrato and chorus** are a scanned delay line (Werner, Dunkel &
-    Germain).
-  - **Leslie.** Horn and drum split at 800 Hz, each with an interpolated Doppler
-    delay, amplitude modulation and an angle-dependent filter (Smith, Serafin,
-    Abel & Berners). Spin-up and spin-down follow lags with separate rise and
-    fall times, the horn fast and the drum slow (Herrera, Hanson & Abel). Two
-    virtual microphones give stereo.
+  - **Wheels.** 91 sine wheels on Hammond's twelve gear ratios (85/104 for C,
+    88/64 for A, …), wheel frequency 20 rev/s × ratio × teeth, the teeth
+    doubling each octave. So the tuning is close to equal temperament, not on
+    it, as on the instrument. Each wheel starts at its own phase. The lowest
+    twelve carry a little third harmonic. They are Mathews–Smith phasors,
+    renormalised each block, run four at a time.
+  - **Busbars.** A key connects nine wheels, one per drawbar (16′ an octave
+    down, 5⅓′ a fifth up, … 1′ three octaves up), folding back an octave past
+    either end of the 91. A drawbar step is 3 dB. **A settled key costs only
+    nine gains on the busbars**, ramped per block, so the organ's cost hardly
+    grows with keys held: 30 keys cost 36 % more than one, on the Mac.
+  - **Key click.** Each of a key's nine contacts closes at its own moment in its
+    first 1.2 ms. `CLICK` sets how abruptly: a 6 ms ramp at zero, 0.06 ms at
+    full, and a short burst of 2–4 kHz noise for the contacts' bounce on key
+    down and, softer, key up. A key in its first milliseconds is mixed sample by
+    sample so the contacts close when they should.
+  - **Percussion** (`PING`) is on the third harmonic (the 2⅔′ wheel) and
+    single-triggered: it fires only when no key is down, and then for every
+    key struck with it, so legato lines get none. `TAIL` sets its fall, 0.25 to
+    2.5 s.
+  - **Leakage** (`LEAK`): each sounding wheel bleeds into the wheels a
+    semitone either side and its partner four octaves away on the same shaft,
+    up to −24 dB (after Pekonen, Pihlajamäki & Välimäki).
+  - **`SOFT`** is drawbar brightness: the drawbars above 8′ fall away, 13 dB at
+    the 4′ end to end and twice that at the 2′, at the same overall level. At
+    the middle the registration is literal.
+  - **Scanner vibrato and chorus** (`LUSH`): a delay swept by a 6.9 Hz triangle,
+    up to 0.5 ms either way, mixed half and half with the dry sound at full,
+    which is the C3 setting. Turned down it is gentler; at zero it is off.
+    (Werner, Dunkel & Germain model the scanner itself, a line box of LC
+    sections; a swept delay is its audible half.)
+  - **Leslie** (`fx.c`), after Smith, Serafin, Abel & Berners:
+    - **Split** at 800 Hz: the horn above, the drum below. Each is a Doppler
+      delay, the horn's swinging about ±0.5 ms and the drum's ±0.14 ms.
+    - **The horn** is louder and brighter facing the microphone (about 8 dB
+      and 2.5 → 12 kHz around a turn).
+    - **Stereo:** two microphones a third of a turn apart.
+    - **Speed:** `SWAY` moves both rotors continuously from `SLOW` (0.4–1.6 Hz
+      for the horn) to `FAST` (5–8 Hz), the drum at 0.84 of the horn. Each
+      rotor chases the setting with its own inertia (Herrera, Hanson & Abel):
+      the horn in about 0.7 s up and 0.9 s down, the drum in about 4.5 s up and
+      5.5 s down. So a quick turn of `SWAY` gives the familiar slow wind-up.
   - **Default** is flute drawbars `00 8800 000` and a slow Leslie, in the
     lineage of *A Whiter Shade of Pale*.
-- **Flute Organ.** Additive ranks, stopped (odd harmonics) or open. The chiff is a
-  noise burst with the partials staggered in, as Castellengo measured in flute
-  attacks. It has a tremulant.
-- **String Ensemble.** A divide-down sawtooth bank with 8′ and 4′ registers. Its
-  ensemble chorus is three bucket-brigade delays swept by slow and fast LFOs at
-  120°, after Raffel & Smith.
+  - Rejected: SWAY as a two-position switch, which is how a half-moon works. A
+    knob that only did something at its middle would read as broken, and
+    intermediate speeds are useful.
+- **Flute Organ.** Pipe ranks at 8′, 4′ and 2′, one phase per pitch shared by
+  every rank that sounds it, each pipe a fraction of a cent off true. The 8′
+  is stopped (odd partials); `EDGE` opens it toward an open flute and brightens
+  the others. `SOFT` is the wind: each partial above the first up to 3.5 dB
+  softer per step, and a gentler wind speaks more slowly. A pipe speaks with its
+  upper partials first, then its fundamental (`SWELL` sets how long, 15 ms to
+  0.4 s), as Castellengo measured. `PUFF` is the chiff: for an instant the
+  pipe overblows (a stopped pipe to its twelfth, an open one to its octave),
+  and a breath of noise rings about its fourth partial. `SWAY` is the
+  tremulant, a tremolo in one channel, as it is in the wind.
+- **String Ensemble.** Twelve top-octave sawtooth oscillators (C8–B8, PolyBLEP)
+  divided down, so every octave of every note is locked in phase, as a string
+  machine's are. 8′, 4′ and 2′ registers. `SOFT` is a two-pole low-pass on the
+  sum, 12 kHz down to 400 Hz; `EDGE` a presence peak about 2.2 kHz, up to
+  +9.5 dB. `SWELL` is the attack, 20 ms to 1.2 s. **`LUSH` is the ensemble:**
+  three taps on one delay line (5.5 ms), each swept by a 0.63 Hz and a 6.3 Hz
+  LFO at its own third of the cycle, after Raffel & Smith. The left hears the
+  first two taps and the right the last two. **`SWAY` is a vibrato**, up to
+  20 cents at `SPEED`. The plan had `SWAY` as the ensemble's depth, but that is
+  `LUSH`, and one meaning per knob is the rule.
+- **The flute organ and string machine** cost a little more per key (about
+  2.4 µs and 0.7 µs per key per block on the Mac). Unlike the organ, each
+  key reads its generators itself.
 
 ### 6. Synthetic: FM and formant
 
-- **Glass E.Piano.** Chowning FM: two operator pairs, with velocity driving the
-  modulation index. Soft playing gives nearly a sine, harder playing opens the
-  tine "tink".
+- **Glass E.Piano** (built 2026-10-04, `fm.c`). Chowning FM in two operator
+  pairs, after the 1980s FM electric pianos:
+  - **Tine pair:** carrier at f₀, modulator at 14 f₀. Its index jumps with the
+    blow (up to about 2.5, past which the tink's sideband would fall back
+    toward its first null) and falls within about 0.25 s to a small floor. So a
+    firm note opens with the bright, inharmonic *tink* (`TINE`) and settles to
+    nearly a sine.
+  - **Bell pair:** carrier at f₀, a few cents apart (`SPLIT`, 1–15 cents, so
+    the pairs beat), modulator at `TUNE`'s ratio, 1 to 5. Whole numbers ring
+    as bells and the ratios between them as glass. Its index is `GLASS`; it
+    rings shorter than the tine pair, so the note mellows as it sounds.
+  - **Velocity** drives both indices, so soft playing is nearly a sine.
+    `SOFT` scales them a decade either way of the middle and gives the attack
+    up to 8 ms. It rings 5 s at middle C, shorter up the keys, `DECAY` a
+    factor of 4 either way; released, 0.3 s.
 - **Choir.** Each singer is a soft glottal pulse with jitter and breath noise
   through a Klatt-style cascade of five formant resonators. `VOWEL` morphs oo →
   oh → ah. Three singers per note, each detuned and drifting on its own, make a
@@ -679,7 +740,7 @@ and fails if any knob appears twice, if `CLOSE` returns, or if `SPEED` is shown 
 the Vibraphone.
 
 **Picking an instrument.** `TYPE` steps through the instruments built so far, in
-family order: today the seventeen named at the top of this document. The jog
+family order: today the twenty-one named at the top of this document. The jog
 wheel browses **presets** on the Main page; for now there is one per instrument, its
 default sound. At 1.0 the presets become the catalogue: 38 instruments × 3 = 114,
 named *Family · Instrument · Variation*, for example *Mallets · Vibraphone · Motor
@@ -717,6 +778,10 @@ key. Any Effects key not named takes its shared default.
 | Kalimba / Music Box | A thumb piano with a touch of its buzzers | SOFT 60, BUZZ 30, DECAY 55, SPACE 25 | BODY 70, SPLIT 10, NOISE 30, DAMP 0 | SIZE 40 (1.8 s), DARK 50, DELAY 10 |
 | Electric Grand | A CP-70 in a ballad | SOFT 50, TWANG 35, DECAY 50, SWAY 20, SPACE 20 | BODY 50, SPLIT 20, NOISE 30, DAMP 30 | SIZE 45 (2.0 s), DARK 50, DELAY 12, SPEED 25 (a slow auto-pan) |
 | Tine Piano | A suitcase tine piano, voiced a little toward bark | SOFT 60, BARK 40, DECAY 55, SWAY 30, SPACE 20 | BODY 60, SPLIT 10, NOISE 25, DAMP 30 | SIZE 45 (2.0 s), DARK 50, DELAY 12, SPEED 30 (the slow stereo vibrato) |
+| Tonewheel Organ | *A Whiter Shade of Pale*: flutes `00 8800 000`, the Leslie slow | SOFT 50, LUSH 60, DECAY 30, SWAY 0, SPACE 20 | CLICK 35, LEAK 25, SLOW 30, FAST 60 | SIZE 40 (1.9 s), DARK 50, DELAY 10, DRIVE 20 (the preamp a little warm) |
+| Flute Organ | A chamber organ in a stone church: stopped 8′, open 4′ | SOFT 60, PUFF 45, DECAY 30, SWAY 10, SPACE 35 | EDGE 25, SWELL 35, 8′ 80, 4′ 50, 2′ 0 | SIZE 70 (3.2 s), DARK 45, DELAY 25, SPEED 55 (a 4.6 Hz tremulant) |
+| Glass E.Piano | An FM electric piano with its chorus | SOFT 60, GLASS 35, DECAY 55, SWAY 20, SPACE 30 | TUNE 50 (the bell pair on 3 : 1), TINE 45, SPLIT 25 | SIZE 50 (2.2 s), DARK 40, DELAY 15, SPEED 30 |
+| String Ensemble | *Oxygène*: viola and violin registers, a slow swell | SOFT 60, LUSH 70, DECAY 50, SWAY 0, SPACE 35 | EDGE 30, SWELL 45, 8′ 80, 4′ 60, 2′ 0 | SIZE 65 (3.0 s), DARK 45, DELAY 20 |
 | Reed Piano | A reed piano turned down in a small room | SOFT 60, BITE 45, DECAY 50, SWAY 25, SPACE 20 | BODY 50, SPLIT 8, NOISE 25, DAMP 30 | SIZE 35 (1.7 s), DARK 55, DELAY 8, SPEED 45 (its own tremolo), DRIVE 15 (the amplifier just warm) |
 | Tubular Bells | Chimes in a church, the pedal half down | SOFT 50, MUTE 20, DECAY 55, SPACE 32 | BODY 15, SPLIT 10, NOISE 25, DAMP 10 | SIZE 70 (3.2 s), DARK 45, DELAY 30 |
 | Handbells | The tierce half in, the bells beating gently | SOFT 60, MINOR 50, DECAY 55, SPACE 32 | BODY 30, SPLIT 15, NOISE 20, DAMP 0 | SIZE 65 (3.0 s), DARK 40, DELAY 25 |
@@ -729,7 +794,7 @@ Values are percentages; the times are the plate's measured ring (RT60).
 **They are equally loud.** Switching instruments must not jump in level. Each
 instrument's own gain is set so the same phrase (a gentle chord, a line over it, a
 fuller chord, velocities 55–76) measures within half a decibel of
-**−26.5 LUFS** on all seventeen (measured −26.4 to −26.6), with the voicing's
+**−26.5 LUFS** on all twenty-one (measured −26.4 to −26.6), with the voicing's
 room included. Before this the first four were 12 dB apart, the Felt Upright
 quietest. Two engine changes made the
 match possible without pushing loud chords into the limiter:
@@ -781,6 +846,20 @@ the sound by at least a set amount**, measured on a middle C:
 | TWANG | The fourth partial at least 8 dB forward |
 | BARK, BITE | At a firm touch, the second harmonic at least 10 dB up, while the level changes less than 6 dB |
 | DRIVE | At least 15 dB more harmonics |
+| **Organ:** SOFT | The 4′ at least 12 dB down against the 8′, the level within 10 dB |
+| LUSH (organ), LUSH (strings) | The scanner chorus, the ensemble: the note moves at least 3 dB more |
+| SWAY (organ), SLOW, FAST | The Leslie's swing under 2 Hz at the bottom, over 5 Hz at the top; SLOW at least doubles the slow speed, FAST raises the fast one 40 % |
+| PING, TAIL | The third harmonic at least 12 dB up; at 0.6 s, at least 12 dB longer |
+| CLICK | The click heard at no less than −14 dB against the note, in the first 50 ms |
+| LEAK | The next wheel at least 12 dB more |
+| Each drawbar, 8′ and the registers | Its own harmonic at least 12 dB up |
+| DECAY on a sustained instrument | A released note at least 20 dB longer at 0.3 s |
+| **Flute Organ:** PUFF | The chiff heard at no less than −14 dB, in the first 50 ms |
+| EDGE (flute), EDGE (strings) | The stopped pipe's octave at least 12 dB up; the presence near 2 kHz at least 6 dB up |
+| SWELL | At least 12 dB quieter at 30 ms against the held note |
+| **Strings:** SWAY | The vibrato spreads the fourth harmonic at least 6 dB |
+| **Glass E.Piano:** GLASS, TINE | The bell pair's sideband at 4 f₀, the tink at 13 f₀: each at least 12 dB up |
+| TUNE | Off the whole numbers the bell goes inharmonic: 1.5 f₀ at least 12 dB up |
 | SIZE | The room rings at least 20 dB longer at 2 s |
 | DARK | The room's tail at least 6 dB darker, heard on the Electric Grand, hard, pickups full up (once on a hard Felt Upright, whose brightness there was partly the contact ringing up; see *Stable at any setting*) |
 | DELAY | The room answers at least 80 ms later |
@@ -831,7 +910,7 @@ example `FELT`, `VEIL` or `PUFF`.
 | `SOFT` | `soft` | 0–100 % | **The contact.** Hammer, mallet or fingertip hardness for struck and plucked instruments. Bow hair tension and friction for bowed. Breath softness (more noise, less edge) for blown. Drawbar brightness for the organ. Attack softness for the synthetic voices. |
 | *(CHAR)* | `c_felt_upright`, `c_una_corda_grand`, … | 0–100 % | The active instrument's signature, from the CHAR column above. The cell carries that instrument's own word (`FELT`, `VEIL`, `AIR`…); see below for how. It is on Main only. |
 | `DECAY` | `decay` | 0–100 % | Losses and ring time for struck and plucked. Release for sustained. |
-| `SWAY` | `sway` | 0–100 % | Motion. Tremolo or auto-pan for keys and mallets, the vibraphone fan's depth, vibrato for bowed and blown, Leslie slow↔fast for the organ, ensemble depth for the string machine and choir. |
+| `SWAY` | `sway` | 0–100 % | Motion. Auto-pan for keys and mallets (a tremolo in one channel on the Reed Piano, the tremulant on the Flute Organ), the vibraphone fan's depth, vibrato for the string machine, bowed and blown, the Leslie from slow to fast for the organ, ensemble depth for the choir. |
 | `TONE` | `tone` | 0–100 % | Tilts the whole sound: a shelf about 600 Hz (±10 dB at the ends) and a gentler one about 3 kHz (±8 dB), so it is heard on a glockenspiel as well as a piano. The middle is flat. |
 | `SPACE` | `space` | 0–100 % | How much goes to the plate reverb: full up sends 1.75 times the dry sound. |
 | `VOL` | `volume` | −60 to +6 dB | Output level, before the headroom and the limiter. The one knob `TYPE` leaves alone. |
@@ -994,7 +1073,11 @@ SIZE   DARK   DELAY  DRIVE
 SPEED
 ```
 
-`SPEED` is hidden on the Vibraphone (see *One place for everything*).
+`SPEED` is hidden on the Vibraphone, whose fan has `MOTOR`, and on the Tonewheel
+Organ, whose Leslie has `SLOW` and `FAST` (see *One place for everything*). A
+gate is one comparison, so the organ has its own Effects level without `SPEED`
+(`fx_organ`, gated `equals`), the other is gated `not_equals` the organ, and
+within it `SPEED` is gated `not_equals` the Vibraphone.
 
 | Cell | Key | Header | Turning it up |
 |---|---|---|---|
@@ -1053,9 +1136,18 @@ with the pedal down and the plate on.
 | Celesta | 4.0 % | 116 |
 | Tongue Drum | 3.8 % | 111 |
 | Toy Piano | 2.9 % | 83 |
+| Glass E.Piano | 12.2 % | 354 |
+| Flute Organ | 11.6 % | 338 |
+| String Ensemble | 7.0 % | 203 |
+| Tonewheel Organ | 6.0 % | 174 |
 | Effects alone | 2.7 % | 79 |
 
-Remeasured with seventeen instruments (2026-10-04). The four string instruments
+Remeasured with seventeen instruments (2026-10-04); the four of build step 5
+measured the same day, sixteen keys held. The Flute Organ first measured
+21.8 %: its inner loop worked out each pitch (`powf`) and the chiff's
+resonator (`cosf`) every sample, and walked all 128 keys. Those now happen once
+per block, for the keys that are sounding. The Glass E.Piano's four sines per
+voice per sample could be vectorised if room is needed. The four string instruments
 use nearly the whole budget of 1,536 oscillators; the rest are light. The tine
 and reed pianos' pickups cost about 1 % over a plain bar.
 
@@ -1177,12 +1269,15 @@ from the benchmark sharing the CPU, not from the engine.
      resonator; and the dulcimer was modelled as a piano unison, which hid its
      beating. See *The engines*. 524 checks pass.
    - ~~Tine Piano and Reed Piano, with the pickups.~~ **Done**, 2026-10-04,
-     installed on the Move, awaiting the user's listening. Building them found
+     installed on the Move; the user found them good. Building them found
      that the contact could ring up to full scale on hard treble notes; fixed
      for every instrument (see *Stable at any setting*). 575 checks pass.
-     **Release 0.2** waits on the user's listening and go-ahead.
-5. **Banks and synthetic engines:** Tonewheel Organ (with Leslie), Flute Organ,
-   String Ensemble, Glass E.Piano. **Release 0.3.**
+     **Release 0.2** was not cut; the work went on to step 5.
+5. ~~**Banks and synthetic engines:** Tonewheel Organ (with Leslie), Flute Organ,
+   String Ensemble, Glass E.Piano.~~ **Done**, 2026-10-04, on request after the
+   user found the tine and reed pianos good. Installed on the Move, awaiting the
+   user's listening. 701 checks pass. **Release 0.3** waits on the user's
+   go-ahead.
 6. **Waveguide engine:** Harp, Nylon Guitar, Pizzicato, Clavichord. Then the bow
    and friction: Solo Cello, Solo Violin, String Section. **Release 0.4.**
 7. **Air engine and banded waveguide engine:** Flute, Pan Flute, Ocarina,
@@ -1224,7 +1319,8 @@ module black-box through the v2 API, as `chain_host` would.
   - Detuned unisons give a two-stage decay.
   - A bowed string reaches Helmholtz motion (a periodic stick–slip) within the
     expected number of periods.
-  - Organ and string-machine cost is the same with 1 and with 30 keys held.
+  - (Planned, not a test: the organ's cost with 1 and with 30 keys held. It
+    was measured instead; see *Banks*.)
 - **Every knob is heard.** Each knob, end to end on every instrument `TYPE`
   offers, meets its minimum in *Every knob is heard*; `BELL` brings the upper
   modes up 12 dB, and `BUZZ` raises the sizzle above 6 kHz by 10 dB, to at least

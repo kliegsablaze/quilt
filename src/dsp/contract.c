@@ -75,6 +75,8 @@ static int shape_offered(shape_t s) {
     return 0;
 }
 
+static int organ_offered(void) { return shape_offered(SH_ORGAN); }
+
 static void build_chain_params(sb_t *b) {
     sb_printf(b, "[");
     param_json(b, &QUILT_TYPE_PARAM);
@@ -137,7 +139,9 @@ static void build_hierarchy(sb_t *b) {
         if (QUILT_SHAPES[s].extra_level && shape_offered((shape_t)s))
             sb_printf(b, ",{\"level\":\"%s\",\"label\":\"%s\"}",
                       QUILT_SHAPES[s].extra_level, QUILT_SHAPES[s].extra_label);
-    sb_printf(b, ",{\"level\":\"fx\",\"label\":\"Effects\"}]}");
+    sb_printf(b, ",{\"level\":\"fx\",\"label\":\"Effects\"}");
+    if (organ_offered()) sb_printf(b, ",{\"level\":\"fx_organ\",\"label\":\"Effects\"}");
+    sb_printf(b, "]}");
 
     /* One Instrument level per instrument, titled with its name, so its labels
      * are its own. Its CHAR lives on Main only. */
@@ -172,20 +176,25 @@ static void build_hierarchy(sb_t *b) {
     }
 
     /* Effects: the plate and DRIVE on top, SPEED below. SPEED is hidden where
-     * SWAY is not a tremolo (the vibraphone, whose fan speed is its MOTOR),
-     * so no knob is ever shown that does nothing. */
-    sb_printf(b, ",\"fx\":{\"label\":\"Effects\",\"knobs\":[\"size\",\"dark\",\"delay\",\"drive\","
+     * it would do nothing: on the vibraphone (its fan speed is MOTOR) and on
+     * the organ (the Leslie has SLOW and FAST). A gate is one comparison, so
+     * the organ gets its own Effects level without SPEED, and the other
+     * level hides SPEED for the vibraphone. tests/plan.test.mjs checks both. */
+    sb_printf(b, ",\"fx\":{\"label\":\"Effects\"");
+    if (organ_offered()) sb_printf(b, ",\"visible_if\":{\"param\":\"type\",\"not_equals\":\"Tonewheel Organ\"}");
+    sb_printf(b, ",\"knobs\":[\"size\",\"dark\",\"delay\",\"drive\","
                  "\"speed\"],\"params\":[\"size\",\"dark\",\"delay\",\"drive\",{\"key\":\"speed\"");
     for (int t = 0; t < QUILT_NTYPES; t++) {
         const int i = quilt_type_inst(t);
-        if (quilt_sway_is_tremolo(i)) continue;
-        /* A gate is one comparison, so this serves one such instrument. A
-         * second (the organ's Leslie) will need SPEED split per instrument,
-         * as CHAR is; tests/run.sh fails until then. */
+        if (quilt_speed_shown(i) || QUILT_INST[i].shape == SH_ORGAN) continue;
         sb_printf(b, ",\"visible_if\":{\"param\":\"type\",\"not_equals\":\"%s\"}", QUILT_INST[i].name);
         break;
     }
     sb_printf(b, "}]}");
+    if (organ_offered())
+        sb_printf(b, ",\"fx_organ\":{\"label\":\"Effects\",\"visible_if\":{\"param\":\"type\",\"equals\":"
+                     "\"Tonewheel Organ\"},\"knobs\":[\"size\",\"dark\",\"delay\",\"drive\"],"
+                     "\"params\":[\"size\",\"dark\",\"delay\",\"drive\"]}");
     sb_printf(b, "}}");
 }
 

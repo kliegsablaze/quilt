@@ -1,7 +1,8 @@
 /*
  * Voices: how a note is started and released, and how voices are shared out.
  *
- *   - Every instrument TYPE offers plays through its engine (modal.c).
+ *   - Every instrument TYPE offers plays through its engine: modal.c,
+ *     fm.c, or banks.c, whose keys are its own and take no voice.
  *   - Struck notes ring after release while a pedal holds them (CC64, or the
  *     modal page's PEDAL knob), and the damper stops them.
  *   - A global budget of modal oscillators, not a voice count, is the guard
@@ -16,15 +17,27 @@
 
 #define TWO_PI 6.28318530718f
 
+static int named(int inst, const char *name) { return !strcmp(QUILT_INST[inst].name, name); }
+
 int quilt_sway_is_tremolo(int inst) {
-    /* On the vibraphone SWAY is the fan's depth (modal.c), not a tremolo. */
-    return strcmp(QUILT_INST[inst].name, "Vibraphone") != 0;
+    /* SWAY is the vibraphone fan's depth (modal.c), the organ's Leslie
+     * (fx.c) and the string machine's vibrato (banks.c), not a tremolo. */
+    return !named(inst, "Vibraphone") && !named(inst, "Tonewheel Organ") && !named(inst, "String Ensemble");
 }
 
 int quilt_sway_is_pan(int inst) {
-    /* The reed piano's tremolo is in its amplifier: one channel, no pan. */
-    return strcmp(QUILT_INST[inst].name, "Reed Piano") != 0;
+    /* The reed piano's tremolo is in its amplifier and the flute organ's is
+     * its tremulant, in the wind: one channel, no pan. */
+    return !named(inst, "Reed Piano") && !named(inst, "Flute Organ");
 }
+
+int quilt_speed_shown(int inst) {
+    /* SPEED is the tremolo's or the vibrato's rate; the fan has MOTOR and
+     * the Leslie its own two speeds. */
+    return !named(inst, "Vibraphone") && !named(inst, "Tonewheel Organ");
+}
+
+int quilt_built(int inst) { return modal_supports(inst) || fm_supports(inst) || banks_supports(inst); }
 
 int quilt_modal_in_use(const quilt_t *q) {
     int n = 0;
@@ -63,7 +76,9 @@ static int quietest(const quilt_t *q, int except_note) {
 }
 
 void quilt_note_on(quilt_t *q, int note, int vel) {
-    if (!modal_supports(q->type)) return;
+    if (banks_supports(q->type)) { banks_note_on(q, note, vel); return; }
+    const int fm = fm_supports(q->type);
+    if (!fm && !modal_supports(q->type)) return;
     int slot = -1;
     for (int i = 0; i < QUILT_VOICES && slot < 0; i++)
         if (q->v[i].active && q->v[i].note == note) slot = i;
@@ -75,7 +90,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
         steal(q, slot);
     }
 
-    int need = modal_osc_needed(q, q->type, note);
+    int need = fm ? 0 : modal_osc_needed(q, q->type, note);
     while (quilt_modal_in_use(q) + need > MODAL_BUDGET) {
         int victim = quietest(q, note);
         if (victim < 0) break;
@@ -83,7 +98,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     }
     int granted = MODAL_BUDGET - quilt_modal_in_use(q);
     if (granted > need) granted = need;
-    if (granted < 8) granted = 8;
+    if (granted < 8 && !fm) granted = 8;
 
     voice_t *v = &q->v[slot];
     memset(v, 0, sizeof(*v));
@@ -93,7 +108,8 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     v->inst = q->type;
     v->vel = (float)vel / 127.0f;
     v->fade = 1.0f;
-    modal_note_on(q, v, granted);
+    if (fm) fm_note_on(q, v);
+    else modal_note_on(q, v, granted);
 }
 
 void quilt_note_off(quilt_t *q, int note) {
@@ -101,6 +117,7 @@ void quilt_note_off(quilt_t *q, int note) {
         voice_t *v = &q->v[i];
         if (v->active && v->note == note) v->held = 0;
     }
+    banks_note_off(q, note);
 }
 
 void quilt_pressure(quilt_t *q, int note, int value) {
@@ -115,6 +132,7 @@ void quilt_pressure(quilt_t *q, int note, int value) {
 void quilt_all_off(quilt_t *q) {
     for (int i = 0; i < QUILT_VOICES; i++)
         if (q->v[i].active) quilt_note_off(q, q->v[i].note);
+    for (int k = 0; k < BANK_KEYS; k++) banks_note_off(q, k);
     q->pedal = 0;
 }
 
@@ -132,8 +150,11 @@ void quilt_render(quilt_t *q, float *left, float *right, int frames) {
 
     for (int i = 0; i < QUILT_VOICES + QUILT_GHOSTS; i++) {
         voice_t *v = &q->v[i];
-        if (v->active) modal_render(q, v, left, right, board, frames);
+        if (!v->active) continue;
+        if (fm_supports(v->inst)) fm_render(q, v, left, right, frames);
+        else modal_render(q, v, left, right, board, frames);
     }
+    banks_render(q, left, right, frames);
 
     /* One motor for every vibraphone note. */
     int vib = quilt_instrument_by_name("Vibraphone");

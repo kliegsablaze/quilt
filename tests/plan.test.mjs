@@ -65,7 +65,7 @@ for (const type of types) {
     check(new Set(all).size === all.length, `${type}: no knob appears twice (${all.filter((k, i) => all.indexOf(k) !== i)})`);
     check(!all.includes("close"), `${type}: CLOSE is gone`);
     check(all.includes("size") && all.includes("drive"), `${type}: Effects is reachable`);
-    check(all.includes("speed") === (type !== "Vibraphone"), `${type}: SPEED is shown only where it does something`);
+    check(all.includes("speed") === (type !== "Vibraphone" && type !== "Tonewheel Organ"), `${type}: SPEED is shown only where it does something`);
     check(all.includes("o_16") === (type === "Tonewheel Organ"), `${type}: Drawbars only for the organ`);
     check([...(plan.conditionKeys || [])].join() === "type", `${type}: the only gate key is type`);
 

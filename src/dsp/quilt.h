@@ -19,7 +19,7 @@
 #define MODAL_MAXOSC 160        /* 72 string modes, two strings each, plus spare */
 #define MODAL_BUDGET 1536       /* oscillators across all voices; see Will it fit */
 #define QUILT_NINST 38
-#define QUILT_NTYPES 17        /* the instruments TYPE offers: those built so far */
+#define QUILT_NTYPES 21        /* the instruments TYPE offers: those built so far */
 #define QUILT_MAX_SHAPE_KEYS 16
 
 typedef enum { FAM_KEYS, FAM_MALLETS, FAM_STRINGS, FAM_GLASS, FAM_BREATH } family_t;
@@ -124,6 +124,17 @@ typedef struct {
     float peak;             /* largest output in the last block */
 } modal_voice_t;
 
+/* One Glass E.Piano voice: two FM pairs, phases in cycles. DESIGN.md, Synthetic. */
+typedef struct {
+    float ph[4], inc[4];    /* tine carrier, tine modulator, bell carrier, bell modulator */
+    float amp, amp_k, amp_kd;           /* level, its fall per sample ringing and damped */
+    float ia, ia_k, ia_floor;           /* the tine pair's index, falling to a floor */
+    float ib, ib_k;                     /* the bell pair's index */
+    float bell, bell_k;                 /* the bell pair's level */
+    float att, att_k;                   /* SOFT's attack */
+    int damped, dampable;
+} fm_voice_t;
+
 typedef struct {
     int active, held, note, inst;
     float fade, fade_step; /* ghosts only */
@@ -131,7 +142,45 @@ typedef struct {
     float press;          /* last pad pressure, 0..1 */
     int got_press;
     modal_voice_t mv;
+    fm_voice_t fm;
 } voice_t;
+
+/* The always-running banks: tonewheels, pipes and the string machine.
+ * Keys open gates on generators that are shared (DESIGN.md, Banks). */
+#define BANK_KEYS 128
+#define BANK_WHEELS 96          /* 91 wheels, padded to groups of four */
+typedef struct {
+    int on, held, inst;
+    int sus;                /* sounding as held: down, or caught by the pedal */
+    float t;                /* since the key went down, s */
+    float rel;              /* the release, 1 while held */
+    float att, att_up;      /* pipe speech or string swell: fundamental, upper partials */
+    float contact[9];       /* organ: when each drawbar's contact closes, s */
+    int perc;               /* organ: struck while the percussion was fresh */
+    float chiff, bp[2];     /* flute: the chiff's burst and its resonator */
+    uint32_t rng;
+} bank_key_t;
+
+typedef struct {
+    bank_key_t key[BANK_KEYS];
+    /* tonewheels: Mathews-Smith phasors with r = 1, renormalised each block */
+    v4 wr[BANK_WHEELS / 4], wi[BANK_WHEELS / 4], wc[BANK_WHEELS / 4], ws[BANK_WHEELS / 4];
+    float wheel[QUILT_MAX_BLOCK][BANK_WHEELS];
+    float perc;             /* the percussion's envelope, shared by every key */
+    int perc_fresh;         /* triggered this block, so a chord's every note gets it */
+    float click, click_lp, click_bp;
+    float scan[512], scan_lp, scan_ph;   /* the scanner's delay line */
+    int scan_w;
+    /* pipes: one phase per pitch, shared by every rank that sounds it */
+    float phase[128];
+    /* string machine: twelve top-octave oscillators, divided down */
+    float top_ph[12];
+    uint32_t top_count[12];
+    float vib_ph;
+    float lp_z[4], bp_z[2];  /* SOFT's low-pass, EDGE's presence */
+    float ens[1024], ens_slow, ens_fast;
+    int ens_w;
+} banks_t;
 
 /* Shared effects: DESIGN.md, Shared effects. */
 #define PLATE_LEN 8192
@@ -146,6 +195,10 @@ typedef struct {
     int w;                               /* shared write index for the tank */
     float damp_z[2], fb[2], lfo, lfo_s;
     float tilt_z[2][2], hp_z[2][2];   /* the two TONE shelves, per channel */
+    /* The Leslie: horn above 800 Hz, drum below, each a Doppler delay. */
+    float les_xo[2], les_horn[256], les_drum[256], les_hlp[2];
+    int les_w;
+    float horn_ang, drum_ang, horn_hz, drum_hz;
 } fx_t;
 
 typedef struct {
@@ -158,6 +211,7 @@ typedef struct {
     float modwheel;       /* CC1 */
     float lfo, motor;
     voice_t v[QUILT_VOICES + QUILT_GHOSTS];
+    banks_t banks;
     fx_t fx;
     char *hierarchy, *chain_params;
     int hierarchy_len, chain_params_len;
@@ -177,6 +231,8 @@ void quilt_all_off(quilt_t *q);
 void quilt_render(quilt_t *q, float *left, float *right, int frames);
 int quilt_sway_is_tremolo(int inst);
 int quilt_sway_is_pan(int inst);
+int quilt_speed_shown(int inst);
+int quilt_built(int inst);
 int quilt_modal_in_use(const quilt_t *q);
 
 /* modal.c */
@@ -187,6 +243,29 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
 float quilt_string_B(int inst, int note, float stiff);   /* for the physics tests */
 float quilt_note_freq(int inst, int note);
 float quilt_bar_ratio(int inst, int k);   /* a bar's declared mode ratio, or 0 */
+
+/* fm.c */
+int fm_supports(int inst);
+void fm_note_on(quilt_t *q, voice_t *v);
+void fm_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
+
+/* banks.c */
+int banks_supports(int inst);
+void banks_reset(banks_t *b);
+void banks_note_on(quilt_t *q, int note, int vel);
+void banks_note_off(quilt_t *q, int note);
+void banks_render(quilt_t *q, float *left, float *right, int frames);
+int banks_active(const quilt_t *q);
+
+/* sin(2 pi x) for x in cycles, to about 4e-6: a 9th-order series on the
+ * nearest quarter-cycle. */
+static inline float fast_sin(float x) {
+    x -= (float)(int)(x + (x >= 0.0f ? 0.5f : -0.5f));
+    if (x > 0.25f) x = 0.5f - x;
+    else if (x < -0.25f) x = -0.5f - x;
+    float y = x * 6.28318530718f, y2 = y * y;
+    return y * (1.0f + y2 * (-1.0f / 6.0f + y2 * (1.0f / 120.0f + y2 * (-1.0f / 5040.0f + y2 * (1.0f / 362880.0f)))));
+}
 
 /* fx.c */
 void fx_reset(fx_t *fx);

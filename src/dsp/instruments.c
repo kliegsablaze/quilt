@@ -156,7 +156,7 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
     { "Reed Piano", "reed_piano", K, ENG_MODAL, SH_MODAL, "Bite", "Reed Bite (Pickup Gap)", .6f, .5f, .25f, .2f },
     { "Celesta", "celesta", K, ENG_MODAL, SH_MODAL, "Bell", "Bell Overtones", .55f, .5f, 0, .3f },
     { "Toy Piano", "toy_piano", K, ENG_MODAL, SH_MODAL, "Bell", "Bell Overtones", .45f, .5f, 0, .22f },
-    { "Tonewheel Organ", "tonewheel_organ", K, ENG_BANKS, SH_ORGAN, "Lush", "Scanner Chorus", .6f, .3f, .2f, .2f },
+    { "Tonewheel Organ", "tonewheel_organ", K, ENG_BANKS, SH_ORGAN, "Lush", "Scanner Chorus", .5f, .3f, 0, .2f },
     { "Flute Organ", "flute_organ", K, ENG_BANKS, SH_MACHINE, "Puff", "Chiff", .6f, .3f, .1f, .35f },
     { "Harmonium", "harmonium", K, ENG_AIR, SH_AIR, "Beat", "Celeste Beating", .6f, .3f, 0, .2f },
     { "Glass E.Piano", "glass_e_piano", K, ENG_SYNTHETIC, SH_FM, "Glass", "Glass Bell", .6f, .55f, .2f, .3f },
@@ -197,7 +197,7 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
  * catalogue's order, when its sound is done; tests check the two agree. */
 const char *const QUILT_TYPE_NAMES[QUILT_NTYPES] = {
     "Felt Upright", "Una Corda Grand", "Electric Grand", "Tine Piano", "Reed Piano",
-    "Celesta", "Toy Piano",
+    "Celesta", "Toy Piano", "Tonewheel Organ", "Flute Organ", "Glass E.Piano", "String Ensemble",
     "Vibraphone", "Marimba", "Xylophone", "Glockenspiel", "Tubular Bells", "Handbells",
     "Handpan", "Tongue Drum", "Kalimba / Music Box", "Hammered Dulcimer",
 };
@@ -242,6 +242,21 @@ static const struct { const char *name, *values; } VOICINGS[] = {
      * amplifier just warm. */
     { "Reed Piano", "char=0.45 m_split=0.08 m_body=0.5 m_noise=0.25 m_damp=0.3 "
                     "size=0.35 dark=0.55 delay=0.08 speed=0.45 drive=0.15" },
+    /* A Whiter Shade of Pale: flutes 00 8800 000, the Leslie slow, the
+     * scanner part way to C3, the preamp a little warm. */
+    { "Tonewheel Organ", "char=0.6 o_click=0.35 o_leak=0.25 o_8=8 o_4=8 "
+                         "size=0.4 dark=0.5 delay=0.1 drive=0.2" },
+    /* A chamber organ in a stone church: a stopped 8' and an open 4', a
+     * little chiff, a gentle tremulant. */
+    { "Flute Organ", "char=0.45 k_edge=0.25 k_swell=0.35 k_8=0.8 k_4=0.5 k_2=0 "
+                     "size=0.7 dark=0.45 delay=0.25 speed=0.55" },
+    /* An FM electric piano with its chorus: a little tink, the bell pair
+     * on the twelfth, the pairs a few cents apart. */
+    { "Glass E.Piano", "char=0.35 f_tune=0.5 f_tine=0.45 f_split=0.25 "
+                       "size=0.5 dark=0.4 delay=0.15 speed=0.3" },
+    /* Oxygene: viola and violin registers, a slow swell, the ensemble deep. */
+    { "String Ensemble", "char=0.7 k_edge=0.3 k_swell=0.45 k_8=0.8 k_4=0.6 k_2=0 "
+                         "size=0.65 dark=0.45 delay=0.2 speed=0.3" },
     /* Sugar-plum: felt hammers, a little of the bell, a medium room. */
     { "Celesta", "char=0.4 m_split=0.05 m_body=0.6 m_noise=0.3 m_damp=0.3 "
                  "size=0.55 dark=0.4 delay=0.2" },

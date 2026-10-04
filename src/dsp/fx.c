@@ -9,6 +9,10 @@
  *                a tremolo (on the vibraphone it is the fan, in modal.c). The
  *                reed piano's is in one channel, as its amplifier's is.
  *   drive        DRIVE: gentle saturation, transparent when quiet.
+ *   leslie       the organ only: horn and drum, each a Doppler delay with
+ *                its own swing in level and tone, heard by two microphones;
+ *                SWAY moves both rotors from SLOW to FAST, and they get
+ *                there with their own inertia.
  *   plate        Dattorro's plate (JAES 1997), SPACE as its send; SIZE its
  *                decay, DARK its damping, DELAY its pre-delay.
  *   tilt         TONE, two shelves, about 600 Hz and 3 kHz.
@@ -71,6 +75,58 @@ static inline float allpass_mod(float *buf, int mask, int w, float delay, float 
 }
 
 static inline float tap(const float *buf, int mask, int w, int k) { return buf[(w - k) & mask]; }
+
+/* The Leslie (Smith, Serafin, Abel & Berners; Herrera, Hanson & Abel).
+ * Below 800 Hz the drum, above it the horn. Each rotor's speed chases SWAY's
+ * place between its slow and fast speeds, the light horn in under a second,
+ * the heavy drum in about five, and slower to stop than to start. As the
+ * horn turns, its sound comes nearer and goes (a delay swinging about half a
+ * millisecond), louder and brighter facing the microphone. */
+static void leslie(quilt_t *q, float *left, float *right, int frames) {
+    fx_t *fx = &q->fx;
+    const int inst = q->type;
+    const float slow = q->slot[inst][quilt_shape_key_in(SH_ORGAN, "o_slow")];
+    const float fast = q->slot[inst][quilt_shape_key_in(SH_ORGAN, "o_fast")];
+    const float sway = q->gs[G_SWAY];
+    const float hs = 0.4f + 1.2f * slow, hf = 5.0f + 3.0f * fast;
+    const float th = hs + (hf - hs) * sway, td = (hs + (hf - hs) * sway) * 0.84f;
+    const float dt = (float)frames / QUILT_SR;
+    fx->horn_hz += (th - fx->horn_hz) * (1.0f - expf(-dt / (th > fx->horn_hz ? 0.7f : 0.9f)));
+    fx->drum_hz += (td - fx->drum_hz) * (1.0f - expf(-dt / (td > fx->drum_hz ? 4.5f : 5.5f)));
+    const float xo = 1.0f - expf(-TWO_PI * 800.0f / QUILT_SR);
+    const float hinc = fx->horn_hz / QUILT_SR, dinc = fx->drum_hz / QUILT_SR;
+    const float kdull = 1.0f - expf(-TWO_PI * 2500.0f / QUILT_SR), kopen = 1.0f - expf(-TWO_PI * 12000.0f / QUILT_SR);
+    static const float mic[2] = { 0.0f, 0.3f };   /* where the two microphones stand, in turns */
+    for (int n = 0; n < frames; n++) {
+        const float x = 0.5f * (left[n] + right[n]);
+        fx->les_xo[0] += (x - fx->les_xo[0]) * xo;
+        fx->les_xo[1] += (fx->les_xo[0] - fx->les_xo[1]) * xo;
+        fx->les_drum[fx->les_w & 255] = fx->les_xo[1];
+        fx->les_horn[fx->les_w & 255] = x - fx->les_xo[1];
+        fx->horn_ang += hinc;
+        if (fx->horn_ang >= 1.0f) fx->horn_ang -= 1.0f;
+        fx->drum_ang += dinc;
+        if (fx->drum_ang >= 1.0f) fx->drum_ang -= 1.0f;
+        float out[2];
+        for (int m = 0; m < 2; m++) {
+            const float ha = fx->horn_ang + mic[m], da = fx->drum_ang + mic[m];
+            const float hs_ = fast_sin(ha), hc = fast_sin(ha + 0.25f);
+            const float ds_ = fast_sin(da), dc = fast_sin(da + 0.25f);
+            float d = 40.0f + 22.0f * hs_, fl = floorf(d), fr = d - fl;
+            int i0 = fx->les_w - (int)fl;
+            float h = fx->les_horn[i0 & 255] * (1.0f - fr) + fx->les_horn[(i0 - 1) & 255] * fr;
+            h *= 0.7f + 0.3f * hc;
+            fx->les_hlp[m] += (h - fx->les_hlp[m]) * (kdull + (kopen - kdull) * (0.5f + 0.5f * hc));
+            d = 40.0f + 6.0f * ds_; fl = floorf(d); fr = d - fl;
+            i0 = fx->les_w - (int)fl;
+            float b = fx->les_drum[i0 & 255] * (1.0f - fr) + fx->les_drum[(i0 - 1) & 255] * fr;
+            out[m] = fx->les_hlp[m] + b * (0.85f + 0.15f * dc);
+        }
+        fx->les_w++;
+        left[n] = out[0];
+        right[n] = out[1];
+    }
+}
 
 /* The send: SPACE. Full up sends 1.75 times the dry sound into the plate. */
 static float plate_send(const float *g) { return g[G_SPACE] * 1.75f; }
@@ -182,6 +238,9 @@ void fx_process(quilt_t *q, float *left, float *right, float *board, int frames)
             right[n] = tanhf(right[n] * g) * makeup;
         }
     }
+
+    if (QUILT_INST[q->type].shape == SH_ORGAN) leslie(q, left, right, frames);
+    else fx->horn_hz = fx->drum_hz = 0.0f;   /* a Leslie switched on starts from rest */
 
     plate(q, left, right, frames);
 
