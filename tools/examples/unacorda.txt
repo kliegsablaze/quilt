@@ -1,0 +1,22 @@
+# Una Corda Grand: the same notes with the soft pedal off, then fully down.
+0.0  type  Una Corda Grand
+0.0  set   space 0.35
+0.0  set   c_una_corda_grand 0
+0.0  on    45 70
+0.0  on    52 65
+0.0  on    57 68
+0.0  on    61 64
+4.0  off   45
+4.0  off   52
+4.0  off   57
+4.0  off   61
+5.0  set   c_una_corda_grand 1
+5.0  on    45 70
+5.0  on    52 65
+5.0  on    57 68
+5.0  on    61 64
+9.0  off   45
+9.0  off   52
+9.0  off   57
+9.0  off   61
+11.0 end

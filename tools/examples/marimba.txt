@@ -1,0 +1,35 @@
+# Marimba: a phrase struck, then a held chord rolled, swelling with pad pressure.
+0.0  type  Marimba
+0.0  set   space 0.3
+0.0  on    60 80
+0.0  off   60
+0.25 on    64 70
+0.25 off   64
+0.5  on    67 75
+0.5  off   67
+0.75 on    72 85
+0.75 off   72
+1.0  on    71 70
+1.0  off   71
+1.5  on    67 75
+1.5  off   67
+2.5  set   c_marimba 0.7
+2.5  on    48 70
+2.5  on    55 70
+2.5  on    64 70
+2.7  press 48 20
+2.7  press 55 20
+2.7  press 64 20
+3.5  press 48 80
+3.5  press 55 80
+3.5  press 64 80
+4.5  press 48 120
+4.5  press 55 120
+4.5  press 64 120
+5.5  press 48 40
+5.5  press 55 40
+5.5  press 64 40
+6.5  off   48
+6.5  off   55
+6.5  off   64
+8.0  end

@@ -1,0 +1,17 @@
+{
+  "id": "quilt",
+  "name": "Quilt",
+  "abbrev": "QLT",
+  "version": "0.0.1",
+  "dsp": "dsp.so",
+  "api_version": 2,
+  "component_type": "sound_generator",
+  "description": "Everything that can be played gently: thirty-eight soft instruments, from felt pianos and vibraphones to bowed cello and breathy flute, all synthesised.",
+  "capabilities": {
+    "audio_out": true,
+    "midi_in": true,
+    "chainable": true,
+    "aftertouch": true,
+    "component_type": "sound_generator"
+  }
+}

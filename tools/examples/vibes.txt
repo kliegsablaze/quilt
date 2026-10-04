@@ -1,0 +1,27 @@
+# Vibraphone: motor off, then the fan on, with the pedal down.
+0.0  type  Vibraphone
+0.0  set   space 0.35
+0.0  set   c_vibraphone 0
+0.0  cc    64 127
+0.0  on    65 80
+0.5  on    69 70
+1.0  on    72 75
+1.5  on    76 70
+4.0  cc    64 0
+4.0  off   65
+4.0  off   69
+4.0  off   72
+4.0  off   76
+4.5  set   c_vibraphone 0.45
+4.5  set   sway 0.6
+4.5  cc    64 127
+4.5  on    65 80
+5.0  on    69 70
+5.5  on    72 75
+6.0  on    76 70
+10.0 cc    64 0
+10.0 off   65
+10.0 off   69
+10.0 off   72
+10.0 off   76
+11.0 end

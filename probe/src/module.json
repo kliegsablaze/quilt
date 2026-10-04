@@ -1,0 +1,17 @@
+{
+  "id": "quiltprobe",
+  "name": "Quilt Probe",
+  "abbrev": "QPR",
+  "version": "0.0.1",
+  "dsp": "dsp.so",
+  "api_version": 2,
+  "component_type": "sound_generator",
+  "description": "Throwaway test instrument for Quilt: checks that knob labels follow the instrument and that pad pressure arrives.",
+  "capabilities": {
+    "audio_out": true,
+    "midi_in": true,
+    "chainable": true,
+    "aftertouch": true,
+    "component_type": "sound_generator"
+  }
+}
