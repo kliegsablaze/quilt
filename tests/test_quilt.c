@@ -114,7 +114,7 @@ static void types(void *p) {
     CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "type by float index");
     A->set_param(p, "type", "Banjo");
     CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "an unknown type is ignored");
-    A->set_param(p, "type", "Solo Cello");
+    A->set_param(p, "type", "Flute");
     CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "an instrument not built yet is not offered");
     A->set_param(p, "type", "99");
     CHECK(is(p, "type", QUILT_TYPE_NAMES[QUILT_NTYPES - 1]), "an index past the end clamps to the last");
@@ -180,6 +180,7 @@ static void voicings(void *p) {
               "writing %s again keeps what was turned", QUILT_TYPE_NAMES[t]);
         A->destroy_instance(ref);
     }
+    A->set_param(p, "type", "Felt Upright");
     A->set_param(p, "b_edge", "0.99");
     CHECK(fabs(num(p, "b_edge") - 0.4) < 1e-3, "a bowed key written to a piano went nowhere");
     A->set_param(p, "volume", "-120");
@@ -294,6 +295,8 @@ static void *note(const char *type, int key, int vel, int frames, int release_at
     A->set_param(p, "m_body", "0");
     A->set_param(p, "p_noise", "0");
     A->set_param(p, "p_body", "0");
+    A->set_param(p, "b_noise", "0");
+    A->set_param(p, "b_body", "0");
     for (const char *e = extra; e && *e;) {           /* "key=value;key=value" */
         char k[32], v[32];
         int n = 0;
@@ -1084,6 +1087,188 @@ static void plucked(void) {
           "(%+.1f -> %+.1f cents)", a0, a1);
 }
 
+/* ---- the bowed strings ---- */
+
+/* How alike one period is to the next, 0.1 to 0.2 s in: 1 is Helmholtz motion. */
+static double periodic(void) {
+    int lag = (int)(QUILT_SR / cur_f0 + 0.5);
+    double s = 0, e0 = 0, e1 = 0;
+    for (int i = 4410; i < 8820; i++) {
+        s += wave[i] * wave[i + lag]; e0 += wave[i] * wave[i]; e1 += wave[i + lag] * wave[i + lag];
+    }
+    return s / sqrt(e0 * e1 + 1e-30);
+}
+/* Harmonics 5 to 12 together, against the fundamental, in the held note:
+ * as bands, so a section's players a few cents apart are all counted. */
+static double band(double lo, double hi) {
+    double e = 0;
+    for (double f = lo; f < hi; f += 5) e += pow(mag(22050, 8192, f), 2);
+    return e;
+}
+static double m_upper(void) {
+    return 10 * log10(band(cur_f0 * 4.5, cur_f0 * 12.5) / band(cur_f0 * 0.5, cur_f0 * 1.5) + 1e-30);
+}
+static double m_held(void) { return db(rms_at(22050, 22050)); }
+/* The held note's spectral centroid, 50 Hz to 8 kHz: how bright it is. */
+static double m_bright(void) {
+    double num = 0, den = 0;
+    for (double f = 50; f < 8000; f += 25) { double m = mag(22050, 4096, f); num += m * f; den += m; }
+    return num / den;
+}
+/* What the knob adds over the held note, 0.25 to 0.75 s, against it. */
+static double hiss(const char *type, const char *extra, const char *knob) {
+    static float quiet[22050];
+    char e[200];
+    snprintf(e, sizeof(e), "%s;%s=0", extra, knob);
+    void *p = note(type, 60, 90, 33075, -1, e);
+    memcpy(quiet, wave + 11025, sizeof(quiet));
+    double sig = rms_at(11025, 22050);
+    A->destroy_instance(p);
+    snprintf(e, sizeof(e), "%s;%s=1", extra, knob);
+    p = note(type, 60, 90, 33075, -1, e);
+    double acc = 0;
+    for (int k = 0; k < 22050; k++) acc += (wave[11025 + k] - quiet[k]) * (wave[11025 + k] - quiet[k]);
+    A->destroy_instance(p);
+    return db(sqrt(acc / 22050)) - db(sig);
+}
+/* A held note with the pad at `press` from the start; its level from 0.5 s. */
+static double bowed_at(const char *type, int press, const char *extra) {
+    void *p = note(type, 60, 90, 256, -1, extra);
+    midi3(p, 0xA0, 60, press);
+    int16_t out[256];
+    for (int f = 0; f < 44100; f += 128) {
+        A->render_block(p, out, 128);
+        for (int i = 0; i < 128 && f + i < 44100; i++) wave[f + i] = out[2 * i] / 32768.0f;
+    }
+    A->destroy_instance(p);
+    return db(rms_at(22050, 22050));
+}
+
+/* A bowed string has two steady motions, one slip a period (Helmholtz) and
+ * two (the note an octave up), and the bow must hold the first. Every key,
+ * SOFT, bow place and touch: by 1 s, never more alike after half a period
+ * than after a whole one, less 0.1. */
+static void octaves(void) {
+    static const char *const bw[3] = { "Solo Cello", "Solo Violin", "String Section" };
+    static const char *const ck[3] = { "c_solo_cello", "c_solo_violin", "c_string_section" };
+    int bad = 0, n = 0;
+    char what[120] = "";
+    for (int i = 0; i < 3; i++)
+        for (int key = 36; key <= 96; key += 6)
+            for (int sf = 0; sf <= 2; sf++)
+                for (int c = 0; c <= 2; c++)
+                    for (int vel = 30; vel <= 127; vel += 97) {
+                        char x[120];
+                        snprintf(x, sizeof(x), "volume=0;soft=%g;%s=%g", sf * 0.5, ck[i], c * 0.5);
+                        cur_f0 = bowed_freq(quilt_instrument_by_name(bw[i]), key);
+                        void *p = note(bw[i], key, vel, 44100 + 4410 + 2048, -1, x);
+                        double r1 = 0, r2 = 0, e0 = 0, e1 = 0, e2 = 0;
+                        int l1 = (int)(QUILT_SR / cur_f0 + 0.5), l2 = (int)(QUILT_SR / cur_f0 / 2 + 0.5);
+                        for (int k = 44100; k < 44100 + 4410; k++) {
+                            r1 += wave[k] * wave[k + l1]; r2 += wave[k] * wave[k + l2];
+                            e0 += wave[k] * wave[k]; e1 += wave[k + l1] * wave[k + l1]; e2 += wave[k + l2] * wave[k + l2];
+                        }
+                        r1 /= sqrt(e0 * e1 + 1e-30);
+                        r2 /= sqrt(e0 * e2 + 1e-30);
+                        n++;
+                        if (r2 > r1 - 0.1 && !bad++)
+                            snprintf(what, sizeof(what), "%s key %d soft %.1f char %.1f vel %d", bw[i], key, sf * 0.5, c * 0.5, vel);
+                        A->destroy_instance(p);
+                    }
+    CHECK(!bad, "the bow holds one slip a period on all %d settings, never the octave (%d bad; first %s)", n, bad, what);
+}
+
+/* How alike the two channels of a held note are, 0.5 to 1.5 s: 1 is a
+ * point in the middle, lower is wider. */
+static double stereo(const char *type, const char *extra) {
+    void *p = note(type, 60, 90, 256, -1, extra);
+    int16_t out[256];
+    double lr = 0, ll = 0, rr = 0;
+    for (int f = 0; f < 66150; f += 128) {
+        A->render_block(p, out, 128);
+        if (f < 22050) continue;
+        for (int i = 0; i < 128; i++) {
+            double l = out[2 * i], r = out[2 * i + 1];
+            lr += l * r; ll += l * l; rr += r * r;
+        }
+    }
+    A->destroy_instance(p);
+    return lr / sqrt(ll * rr + 1e-30);
+}
+
+static void bowed(void) {
+    static const char *const bw[3] = { "Solo Cello", "Solo Violin", "String Section" };
+    static const char *const ck[3] = { "c_solo_cello", "c_solo_violin", "c_string_section" };
+    double a0, a1, d;
+    for (int i = 0; i < 3; i++) {
+        const char *t = bw[i];
+        const int inst = quilt_instrument_by_name(t);
+        double worst = 0, still = 1;
+        for (int key = 48; key <= 84; key += 12) {
+            cur_f0 = bowed_freq(inst, key);
+            void *p = note(t, key, 90, 22050 + 16384, -1, "volume=0;c_string_section=0");
+            double c = m_pitch();
+            if (fabs(c) > fabs(worst)) worst = c;
+            if (periodic() < still) still = periodic();
+            A->destroy_instance(p);
+        }
+        /* A bowed string's pitch moves a few cents with the bow's force, as
+         * a real one's does (the player's ear takes it up), so 5, not 3. */
+        CHECK(fabs(worst) < 5, "%s: in tune from C3 to C6 (worst %+.1f cents)", t, worst);
+        CHECK(still > 0.95, "%s: the bow settles into Helmholtz motion within 0.1 s (periodicity %.3f)", t, still);
+
+        cur_f0 = bowed_freq(inst, 60);
+        cur_ratio = 4;
+        d = turn(t, 60, 90, 22050 + 8192, -1, "volume=0;c_string_section=0", "soft", m_upper, &a0, &a1);
+        CHECK(d < -12, "%s SOFT: the overtones from the fifth up fall at least 12 dB (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 90, 44100, -1, "volume=0", "soft", m_held, &a0, &a1);
+        CHECK(fabs(d) < 10, "%s SOFT: changes the tone more than the level (%+.1f dB)", t, d);
+        d = turn(t, 60, 90, 44100, 22050, "volume=0", "decay", m_release, &a0, &a1);
+        CHECK(d > 20, "%s DECAY: a released note sounds at least 20 dB longer (%.1f -> %.1f dB)", t, a0, a1);
+        {
+            double h[2];
+            for (int e = 0; e < 2; e++) {
+                void *p = note(t, 60, 90, 22050 + 8192, -1, e ? "volume=0;tone=1" : "volume=0;tone=0");
+                h[e] = part_db(22050, 8192, cur_f0 * 4) - part_db(22050, 8192, cur_f0);
+                A->destroy_instance(p);
+            }
+            CHECK((h[1] - h[0]) / 2 > 4, "%s TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB over 2 octaves)", t, h[0], h[1]);
+            for (int e = 0; e < 2; e++) {
+                void *p = note(t, 60, 90, 22050 + 8192, -1, e ? "volume=0;c_string_section=0;b_edge=1"
+                                                               : "volume=0;c_string_section=0;b_edge=0");
+                h[e] = m_upper();
+                A->destroy_instance(p);
+            }
+            CHECK(h[1] - h[0] > 6, "%s EDGE: the upper harmonics at least 6 dB up (%.1f -> %.1f dB)", t, h[0], h[1]);
+        }
+        d = turn(t, 60, 90, 44100, -1, "volume=0", "b_body", m_held, &a0, &a1);
+        CHECK(d > 3, "%s BODY: at least 3 dB more body (%+.1f dB)", t, d);
+        d = turn(t, 60, 90, 22050, -1, "volume=0;b_bite=0", "b_swell", m_onset, &a0, &a1);
+        CHECK(d < -12, "%s SWELL: the bow swells in at least 12 dB more slowly (%.1f -> %.1f dB at 30 ms)", t, a0, a1);
+        d = hiss(t, "volume=0", "b_noise");
+        CHECK(d > -20, "%s NOISE: the bow's hair is heard, %.1f dB against the note", t, d);
+        d = burst(t, "volume=0", "b_bite");
+        CHECK(d > -14, "%s BITE: the bow's first grip is heard, %.1f dB against the note", t, d);
+        a0 = bowed_at(t, 15, "volume=0;b_press=0");
+        a1 = bowed_at(t, 127, "volume=0;b_press=0");
+        CHECK(a1 - a0 > 10, "%s PRESS Pad: the pad is the bow, at least 10 dB from light to full (%.1f -> %.1f dB)", t, a0, a1);
+        a0 = bowed_at(t, 15, "volume=0;b_press=1");
+        a1 = bowed_at(t, 127, "volume=0;b_press=1");
+        CHECK(fabs(a1 - a0) < 1, "%s PRESS Auto: the pad changes nothing (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 44100 * 2, -1, "volume=0;c_string_section=0", "sway", m_line, &a0, &a1);
+        CHECK(d < -6, "%s SWAY: the vibrato spreads the fourth harmonic at least 6 dB (%.1f -> %.1f dB)", t, a0, a1);
+        if (i < 2) {
+            turn(t, 60, 90, 22050 + 8192, -1, "volume=0", ck[i], m_bright, &a0, &a1);
+            CHECK(a1 < a0 * 0.75, "%s VEIL: toward the fingerboard the note darkens by at least a quarter "
+                  "(centroid %.0f -> %.0f Hz)", t, a0, a1);
+        } else {
+            a0 = stereo(t, "volume=0;c_string_section=0");
+            a1 = stereo(t, "volume=0;c_string_section=1");
+            CHECK(a1 < a0 - 0.2, "%s WIDTH: the players spread, the channels at least 0.2 less alike (%.2f -> %.2f)", t, a0, a1);
+        }
+    }
+}
+
 /* The reverb alone: the same note with and without the plate, subtracted.
  * Everything else is deterministic, so what is left is the plate. */
 static float wet[44100 * 4];
@@ -1264,6 +1449,8 @@ int main(int argc, char **argv) {
     audible();
     machines();
     plucked();
+    bowed();
+    octaves();
     effects();
     clicks();
     cost();

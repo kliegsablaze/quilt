@@ -7,14 +7,14 @@ request. The first request was "a wider palette, more soft sounds". The second w
 "not just keys: strings, xylophones, whatever; the mother of all modules for soft
 sounds". It has grown from four keyboards to **thirty-eight instruments in five
 families**, built on six engines. **The modal engine is built** (build steps 3
-and 4), and so are the banks and the FM voice (step 5) and the plucked half of
-the waveguide engine (step 6): twenty-five instruments play, with the shared
-effects, measured on the Move. They are Felt Upright, Una Corda Grand, Electric
-Grand, Clavichord, Tine Piano, Reed Piano, Celesta, Toy Piano, Tonewheel Organ,
-Flute Organ, Glass E.Piano, String Ensemble, Vibraphone, Marimba, Xylophone,
-Glockenspiel, Tubular Bells, Handbells, Handpan, Tongue Drum, Kalimba / Music
-Box, Harp, Nylon Guitar, Hammered Dulcimer and Pizzicato. The other
-thirteen instruments have their
+and 4), and so are the banks and the FM voice (step 5) and the waveguide
+engine, plucked and bowed (step 6): twenty-eight instruments play, with the
+shared effects, measured on the Move. They are Felt Upright, Una Corda Grand,
+Electric Grand, Clavichord, Tine Piano, Reed Piano, Celesta, Toy Piano,
+Tonewheel Organ, Flute Organ, Glass E.Piano, String Ensemble, Vibraphone,
+Marimba, Xylophone, Glockenspiel, Tubular Bells, Handbells, Handpan, Tongue
+Drum, Kalimba / Music Box, Harp, Nylon Guitar, Hammered Dulcimer, Pizzicato,
+Solo Cello, Solo Violin and String Section. The other ten instruments have their
 pages and labels in place, but **`TYPE` does not offer them until their engine is
 built**, so nothing on the Move is a stand-in. Each instrument arrives with its own
 default sound on every page (see *Every instrument starts beautiful*).
@@ -391,8 +391,8 @@ and kalimba.
 
 ### 2. Waveguide: plucked and bowed strings, and the clavichord
 
-The plucked half is built (2026-10-04, `waveguide.c`): Harp, Nylon Guitar,
-Pizzicato and Clavichord. The bowed half is next.
+Built 2026-10-04 (`waveguide.c`): the plucked Harp, Nylon Guitar, Pizzicato
+and Clavichord, then the bowed Solo Cello, Solo Violin and String Section.
 
 - **What it is.** A string is a delay line closed on itself through its losses
   (Jaffe & Smith's extended Karplus–Strong; Karjalainen, Välimäki & Tolonen).
@@ -457,17 +457,82 @@ Pizzicato and Clavichord. The bowed half is next.
 - **Cost on the Move:** Harp 8.3 % with its bank, Nylon Guitar 6.9 %,
   Clavichord 4.6 %, Pizzicato 3.4 %.
 
-The bowed half, still to be built:
-- **Bowed instruments** (cello, violin, section) use Smith's bowed-string
-  waveguide. The bow is a nonlinear friction junction where the string sticks and
-  slips, after McIntyre, Schumacher & Woodhouse. The friction curve is chosen
-  after Serafin, Smith & Woodhouse's playability study. **Bow pressure is pad
-  pressure. Bow speed follows pressure and velocity. Bow position is `VEIL`.**
-  At low pressure and far from the bridge the model gives the soft *flautando*
-  tone naturally. The body is a shared filter after the voice sum, which is valid
-  because the body is linear.
-- **Section.** Three bowed strings per note, each with its own small detune,
-  vibrato phase and bow noise, through one shared body and hall.
+**The bow** (Smith's bowed string). Each string is two delay lines, the bow
+between them at β of the length from the bridge; the nut reflects without
+loss, the bridge through the loss filter. Where they meet, the bow and the
+string stick or slip (McIntyre, Schumacher & Woodhouse): the bow gives the
+string the difference in their speeds times a friction curve,
+(|slope·Δv| + 0.75)⁻⁴, near 1 while they stick and falling as they slip, a
+firmer bow being a lower slope. That alone settles into Helmholtz motion, one
+slip a period, within 0.1 s: the harmonics fall as 1/n, and the one with a node
+at the bow is missing.
+
+- **Pad pressure is the bow:** how hard it presses and how fast it moves.
+  `PRESS` chooses **Pad**, **Auto** (a swell up to the key's velocity in
+  `SWELL`'s time, 20 ms to 1.2 s) or **Blend**. On Pad a quarter of the swell
+  stays under the pad, so a held key never falls silent; with no pressure
+  arriving at all (external MIDI without aftertouch), Pad and Blend follow the
+  swell. Pad pressure spans about 14 dB from light to full.
+- **`BITE`** is a firmer bow for the first 80 ms, the grip of the attack.
+- **Released,** the bow leaves the string within about 15 ms (slowing on it, it
+  would damp it) and the string rings for `DECAY`'s release, 0.1 s to 4 s.
+- **`VEIL`** moves the bow from 6 % of the length (near the bridge) to 18 %
+  (over the fingerboard), and **`SWAY`** (or the mod wheel) is the vibrato, up
+  to 40 cents at `SPEED`, coming in after the note has spoken. It moves only
+  the finger, on the neck side; the bow stays put.
+- **The body** is after the voices and shared, because it is linear: the direct
+  path plus four band-passes for the last bowed instrument chosen (the cello's
+  air at 105 Hz, the violin's at 280, the bridge hill at 1.6 or 2.5 kHz).
+- **`NOISE`** is the hair's hiss, following the bow's pressure.
+- **The String Section** bows three strings a note, each with its own vibrato.
+  `WIDTH` spreads them up to ±22 cents, across the stereo field and 7 ms
+  apart in time. Even together they stay a couple of cents apart, as players
+  always are, because three identical strings add up in phase 5 dB louder, and
+  any vibrato then took that away.
+
+**What it took to make the bow behave.** A bowed string has two steady
+motions: one slip a period, and two, which is the note an octave up. A
+search of every key, `SOFT`, bow place and touch (594 settings) at first found
+dozens that fell into the octave. In order:
+
+1. **Brightness moved out of the loop.** A lighter bow leaves rounder corners
+   on the travelling kink, so a darker note (Cremer). The first versions made
+   that a loss in the loop, from the force; but darkening the loop pushed the
+   bow below the force it needs, into the octave. The rounding belongs to the
+   corner as it reaches the bridge, once, so it is now a smoothing of what the
+   bridge hears, its cutoff following the force, the bow's place and `SOFT`.
+   The loss in the loop is `EDGE` alone. `SOFT` (slack hair) and `VEIL` became
+   real tone controls at the same time: each takes 12 to 22 dB off the upper
+   harmonics, or darkens the note by a third to a half.
+2. **The bow keeps its weight over the fingerboard,** where it had been
+   lightened (Schelleng's minimum force falls there, but this friction curve
+   needed more), and never presses less than 0.55.
+3. **The bridge side is read at its exact length.** Rounded to whole samples,
+   high notes moved the bow a percent, onto places where the octave's motion
+   is the steadier.
+4. **Considered and dropped:** a player's "ear" that counted the fundamental's
+   period and moved the finger, and a rescue that pressed harder or lighter
+   when the octave took over. Both fixed some settings and broke others; once
+   the brightness left the loop, the plain model was steadier than either.
+   More damping while bowing (as STK's bowed string has) made it worse.
+
+A test now plays all 594 settings and fails if any is in the octave at 1 s.
+
+**Tuning.** A loss filter delays the high partials less than the fundamental,
+and the slip is triggered by the kink, which is mostly high partials, so a
+bowed string runs a few cents sharp of the length its loop is cut to. Counting
+the filter's delay at 1.15 f₀ instead of f₀ leaves every key within about
+2 cents at the defaults and 4 at the extremes. A real bowed string's pitch also
+moves a few cents with the bow's force, so the test allows 5 cents for the
+bowed strings, against 3 for the rest. A DC blocker fades in at the bridge
+once the bow has lifted: the loop holds a steady part while bowing, which the
+bow needs, but left alone it lingered for seconds after the note.
+
+**Cost on the Move:** Solo Cello 12.0 %, Solo Violin 12.2 %, String Section
+21.5 %. They first measured 23 %, 24 % and 50 %. The vibrato's sine and the
+bite's `expf` moved from every sample to once a block, the bridge side became a
+two-point read, and the neck side's four Lagrange weights are worked out at
+the ends of each block and stepped between.
 
 ### 3. Banded waveguide: bowed and rubbed glass and metal
 
@@ -800,7 +865,7 @@ and fails if any knob appears twice, if `CLOSE` returns, or if `SPEED` is shown 
 the Vibraphone.
 
 **Picking an instrument.** `TYPE` steps through the instruments built so far, in
-family order: today the twenty-five named at the top of this document. The jog
+family order: today the twenty-eight named at the top of this document. The jog
 wheel browses **presets** on the Main page; for now there is one per instrument, its
 default sound. At 1.0 the presets become the catalogue: 38 instruments × 3 = 114,
 named *Family · Instrument · Variation*, for example *Mallets · Vibraphone · Motor
@@ -852,13 +917,16 @@ key. Any Effects key not named takes its shared default.
 | Harp | A concert harp in a hall, its lower strings answering | SOFT 60, BLOOM 40, DECAY 70, SPACE 35 | SPOT 35, BODY 60, EDGE 45, NOISE 20, DAMP 5, STIFF 20 | A hall: SIZE 65 (3.1 s), DARK 45, DELAY 25 |
 | Nylon Guitar | Fingerstyle near the soundhole, the open strings ringing a little | SOFT 60, BLOOM 35, DECAY 50, SPACE 20 | SPOT 25, BODY 65, EDGE 40, NOISE 30, DAMP 20, STIFF 25 | SIZE 45 (2.1 s), DARK 50, DELAY 12 |
 | Pizzicato | Cellos and violas plucked with the pad of the finger, nearer the cello | SOFT 70, DEEP 60, DECAY 50, SPACE 30 | SPOT 45, BODY 70, EDGE 30, NOISE 35, DAMP 30, STIFF 15 | SIZE 60 (2.7 s), DARK 45, DELAY 20 |
+| Solo Cello | Sul tasto, a light bow, a slow vibrato, in a warm room | SOFT 60, VEIL 60, DECAY 40, SWAY 30, SPACE 30 | BODY 60, EDGE 40, PRESS Pad, SWELL 20, NOISE 25, BITE 30 | SIZE 50 (2.2 s), DARK 50, DELAY 15, SPEED 65 (a 5.4 Hz vibrato) |
+| Solo Violin | *Flautando*: fast and light over the fingerboard | SOFT 60, VEIL 60, DECAY 40, SWAY 30, SPACE 30 | BODY 60, EDGE 45, PRESS Pad, SWELL 30, NOISE 25, BITE 25 | SIZE 55 (2.5 s), DARK 45, DELAY 18, SPEED 68 |
+| String Section | A section in a hall, the players a little apart | SOFT 60, WIDTH 50, DECAY 50, SWAY 20, SPACE 40 | BODY 60, EDGE 40, PRESS Pad, SWELL 30, NOISE 20, BITE 20 | A hall: SIZE 70 (3.2 s), DARK 45, DELAY 25, SPEED 62 |
 
 Values are percentages; the times are the plate's measured ring (RT60).
 
 **They are equally loud.** Switching instruments must not jump in level. Each
 instrument's own gain is set so the same phrase (a gentle chord, a line over it, a
 fuller chord, velocities 55–76) measures within half a decibel of
-**−26.5 LUFS** on all twenty-five (measured −26.4 to −26.6), with the voicing's
+**−26.5 LUFS** on all twenty-eight (measured −26.4 to −26.6), with the voicing's
 room included. Before this the first four were 12 dB apart, the Felt Upright
 quietest. Two engine changes made the
 match possible without pushing loud chords into the limiter:
@@ -930,6 +998,15 @@ the sound by at least a set amount**, measured on a middle C:
 | DEEP | The third partial at least 8 dB down against the fundamental at C3 |
 | BEND | Full pressure sharpens the note at least 20 cents; none with BEND at zero |
 | Tuning (plucked) | Every C from C3 to C6 within 3 cents |
+| **Bowed:** tuning | Every C from C3 to C6 within 5 cents; one slip a period (periodicity over 0.95) within 0.1 s |
+| SOFT (bowed) | The overtones from the fifth harmonic up at least 12 dB down; the level within 10 dB |
+| EDGE (bowed) | The upper harmonics (fifth to twelfth) at least 6 dB up |
+| VEIL | The held note's spectral centroid at least a quarter lower toward the fingerboard |
+| PRESS | On Pad, the pad from light to full at least 10 dB louder; on Auto, the pad changes nothing |
+| SWELL, BITE, NOISE (bowed) | 12 dB slower at 30 ms; the first grip heard at no less than −14 dB in the first 50 ms; the hiss at no less than −20 dB against the held note |
+| WIDTH | The two channels at least 0.2 less alike (correlation) |
+| SWAY (bowed) | The vibrato spreads the fourth harmonic at least 6 dB |
+| Octave jumps | None, on 594 settings of key, SOFT, bow place and touch |
 | SIZE | The room rings at least 20 dB longer at 2 s |
 | DARK | The room's tail at least 6 dB darker, heard on the Electric Grand, hard, pickups full up (once on a hard Felt Upright, whose brightness there was partly the contact ringing up; see *Stable at any setting*) |
 | DELAY | The room answers at least 80 ms later |
@@ -1214,6 +1291,9 @@ with the pedal down and the plate on.
 | Nylon Guitar | 6.9 % | 200 |
 | Clavichord | 4.6 % | 135 |
 | Pizzicato | 3.4 % | 98 |
+| String Section | 21.5 % | 624 |
+| Solo Violin | 12.2 % | 355 |
+| Solo Cello | 12.0 % | 347 |
 | Effects alone | 2.7 % | 79 |
 
 Remeasured with seventeen instruments (2026-10-04); the four of build step 5
@@ -1280,16 +1360,15 @@ from the benchmark sharing the CPU, not from the engine.
   - `modal.c` and `contact.c`.
   - `banks.c` (the organs and the string machine) and `fm.c` (the Glass
     E.Piano).
-  - `waveguide.c`: the plucked strings, their commuted bodies, and `BLOOM`'s
-    open strings.
+  - `waveguide.c`: the plucked strings, their commuted bodies and `BLOOM`'s
+    open strings; the bowed strings and their shared body.
   - `fx.c`: soundboard, tremolo, drive, the Leslie, plate and tilt.
   - `tools/render` and `tools/bench`.
 
   Still to come:
-  - The bow in `waveguide.c`, then `banded.c`, `air.c`, and the choir's
-    formants.
-  - `friction.c`, the bow and finger friction junction, shared by the bowed
-    strings and the banded engine.
+  - `banded.c`, `air.c`, and the choir's formants.
+  - The bow's friction junction, now in `waveguide.c`, moved to `friction.c`
+    when the banded engine needs it too.
   - The recipes: `instruments.c`, a table of 38 entries, each naming its engine,
     its tables, its defaults and its CHAR key.
 - **`state`** is one JSON blob holding the global keys and, for each instrument
@@ -1355,13 +1434,14 @@ from the benchmark sharing the CPU, not from the engine.
    user found the tine and reed pianos good. Installed on the Move, awaiting the
    user's listening. 701 checks pass. **Release 0.3** waits on the user's
    go-ahead.
-6. **Waveguide engine:** ~~Harp, Nylon Guitar, Pizzicato, Clavichord.~~
-   **Done**, 2026-10-04, on request after the organ group. Installed on the
-   Move, awaiting the user's listening. 807 checks pass. The knob tests caught
-   a loss filter that could take a short note's fundamental with it, a body
-   some 40 dB louder than its string, and finger noise that loudness matching
-   moved. Then the bow and friction: Solo Cello, Solo Violin, String Section.
-   **Release 0.4.**
+6. ~~**Waveguide engine:** Harp, Nylon Guitar, Pizzicato, Clavichord.~~
+   **Done**, 2026-10-04, on request after the organ group; the user found them
+   good. The knob tests caught a loss filter that could take a short note's
+   fundamental with it, a body some 40 dB louder than its string, and finger
+   noise that loudness matching moved. ~~Then the bow: Solo Cello, Solo Violin,
+   String Section.~~ **Done**, 2026-10-04, on request; installed on the Move,
+   awaiting the user's listening. 898 checks pass. See *The bow* for the
+   octave jumps it took. **Release 0.4** waits on the user's go-ahead.
 7. **Air engine and banded waveguide engine:** Flute, Pan Flute, Ocarina,
    Recorder, Clarinet, Harmonium; Bowed Vibes, Glass Harmonica, Singing Bowl.
    **Release 0.5.**

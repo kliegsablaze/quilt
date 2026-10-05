@@ -137,6 +137,12 @@ static float loss_pole(float fb, float t60, float f0) {
     return ((2.0f * c + 1.0f) - sqrtf(4.0f * c + 1.0f)) / (2.0f * c);
 }
 
+/* The largest pole the loss may have at f0 for a fundamental ringing t60. */
+static double pole_cap(double budget, double cw) {
+    const double l2 = pow(10.0, -0.9 * budget / 10.0), b = 1.0 - l2 * cw, k = 1.0 - l2;
+    return (b - sqrt(b * b - k * k)) / k;
+}
+
 /* The loop's gain and pole for a fundamental that rings exactly t60: the
  * pole may take at most 90 % of the loss a period allows at f0, and the
  * gain the rest, so the loop stays below 1 at every frequency. */
@@ -151,6 +157,15 @@ static void loss(float fb, float t60, float f0, float *a, float *g) {
     const double hlp = (1.0 - pa) / sqrt(1.0 - 2.0 * pa * cw + pa * pa);
     *a = (float)pa;
     *g = (float)(pow(10.0, -budget / 20.0) / hlp);
+}
+
+/* Third-order Lagrange weights for the fraction d in [1, 2). */
+static inline void lagrange_h(float d, float *h) {
+    float dm1 = d - 1.0f, dm2 = d - 2.0f, dm3 = d - 3.0f;
+    h[0] = -dm1 * dm2 * dm3 * (1.0f / 6.0f);
+    h[1] = d * dm2 * dm3 * 0.5f;
+    h[2] = -d * dm1 * dm3 * 0.5f;
+    h[3] = d * dm1 * dm2 * (1.0f / 6.0f);
 }
 
 /* Third-order Lagrange read, D samples back from the next write, D >= 2. */
@@ -430,4 +445,345 @@ void waveguide_bank_render(quilt_t *q, const float *bridge, float *left, float *
 void waveguide_bank_reset(wg_bank_t *b) {
     memset(b, 0, sizeof(*b));
     b->inst = -1;
+}
+
+/* ---- the bow: Solo Cello, Solo Violin, String Section ----
+ *
+ * Smith's bowed string: the string is two delay lines, the bow between
+ * them at beta of the length from the bridge (VEIL), the nut reflecting
+ * without loss and the bridge through the loss filter. Where they meet the
+ * bow and the string stick or slip, after McIntyre, Schumacher & Woodhouse:
+ * the bow gives the string the difference in velocity times a friction
+ * curve, (|slope dv| + 0.75)^-4, near 1 while they stick and falling as
+ * they slip; a firmer bow is a lower slope. That alone settles into
+ * Helmholtz motion, one slip per period.
+ *
+ * Pad pressure is the bow: how hard it presses and how fast it moves. With
+ * no pressure (PRESS on Auto, or none arriving) an automatic swell, its
+ * height the key's velocity and its time SWELL, stands in. Lifted, the bow
+ * leaves the string ringing with DECAY's release. The bow hair's width
+ * (SOFT) rounds the slip. The body is after the voices, shared, because it
+ * is linear (bowed_body). */
+
+typedef enum { BC_VEIL, BC_WIDTH } bow_char_t;
+
+typedef struct {
+    const char *name;
+    float gain;
+    int lowest;
+    float t60_ref, f_ref, t60_slope;   /* the string's own ring while bowed */
+    float fb_mult;
+    float body_hz[4], body_t60[4], body_g[4];
+    int players;
+    bow_char_t ch;
+} bow_recipe_t;
+
+static const bow_recipe_t BOW_RECIPES[] = {
+    /* The cello's air mode near 100 Hz, its first wood modes either side of
+     * 200 Hz, and the bridge's broad hill. */
+    { .name = "Solo Cello", .gain = 0.983f, .lowest = 36,
+      .t60_ref = 3.0f, .f_ref = 130.8f, .t60_slope = 0.5f, .fb_mult = 0.8f,
+      .body_hz = { 105, 185, 220, 1600 }, .body_t60 = { 0.10f, 0.06f, 0.06f, 0.006f },
+      .body_g = { 0.8f, 0.7f, 0.7f, 0.5f }, .players = 1, .ch = BC_VEIL },
+    /* The violin's: air at 280 Hz, the main wood modes near 500, the
+     * bridge hill at 2.5 kHz. */
+    { .name = "Solo Violin", .gain = 1.06f, .lowest = 55,
+      .t60_ref = 2.0f, .f_ref = 392.0f, .t60_slope = 0.5f, .fb_mult = 1.0f,
+      .body_hz = { 280, 460, 530, 2500 }, .body_t60 = { 0.08f, 0.05f, 0.05f, 0.005f },
+      .body_g = { 0.8f, 0.7f, 0.7f, 0.6f }, .players = 1, .ch = BC_VEIL },
+    /* Three players a note, through one hall body between the cello's and
+     * the violin's. */
+    { .name = "String Section", .gain = 1.01f, .lowest = 36,
+      .t60_ref = 2.5f, .f_ref = 196.0f, .t60_slope = 0.5f, .fb_mult = 0.9f,
+      .body_hz = { 150, 300, 500, 2000 }, .body_t60 = { 0.08f, 0.05f, 0.05f, 0.006f },
+      .body_g = { 0.7f, 0.6f, 0.6f, 0.5f }, .players = 3, .ch = BC_WIDTH },
+};
+
+static const bow_recipe_t *bow_recipe(int inst) {
+    for (int i = 0; i < N(BOW_RECIPES); i++)
+        if (!strcmp(BOW_RECIPES[i].name, QUILT_INST[inst].name)) return &BOW_RECIPES[i];
+    return NULL;
+}
+
+int bowed_supports(int inst) { return bow_recipe(inst) != NULL; }
+
+float bowed_freq(int inst, int note) {
+    const bow_recipe_t *r = bow_recipe(inst);
+    if (r) while (note < r->lowest) note += 12;
+    while (note > 103) note -= 12;
+    return 440.0f * powf(2.0f, (float)(note - 69) / 12.0f);
+}
+
+void bowed_note_on(quilt_t *q, voice_t *v) {
+    const int inst = v->inst;
+    const bow_recipe_t *r = bow_recipe(inst);
+    bow_voice_t *b = &v->bow;
+    memset(b, 0, sizeof(*b));
+    b->rng = 0x68E31DA4u ^ (uint32_t)(v->note * 7919 + (int)(v->vel * 1000.0f));
+    const float f0 = bowed_freq(inst, v->note), w0 = TWO_PI * f0 / QUILT_SR;
+    const float charv = q->charv[inst];
+    const float soft = q->g[G_SOFT];
+    b->f0 = f0;
+    b->P = QUILT_SR / f0;
+
+    /* VEIL: the bow from near the bridge (bright, it takes a firm bow) to
+     * over the fingerboard (sul tasto, flautando). Nearer the bridge the
+     * string swings less for the same bow, so the level is evened out. */
+    const float veil = r->ch == BC_VEIL ? charv : 0.5f;
+    b->beta = 0.06f + 0.12f * veil;
+    b->veil_comp = powf(b->beta / 0.12f, 0.5f);
+
+    const float edge = slot(q, inst, "b_edge", 0.4f);
+    const float t60 = r->t60_ref * powf(f0 / r->f_ref, -r->t60_slope);
+    const float fb = 300.0f * powf(8000.0f / 300.0f, edge) * r->fb_mult;
+    loss(fb, t60, f0, &b->a, &b->g_play);
+    b->fb = fb;
+    b->t60 = t60;
+    b->cw = cosf(w0);
+    b->budget = 60.0f / (t60 * f0);
+    b->amax = (float)pole_cap(b->budget, b->cw);
+    /* Lifted, the string rings on for DECAY: 0.1 s to 4 s. */
+    const float rel = 0.1f * powf(40.0f, q->g[G_DECAY]);
+    loss(fb, rel, f0, &b->a_rel, &b->g_rel);
+    b->g = b->g_play;
+    /* The bow drags the string along, which the loop of velocity waves
+     * holds as a steady part. Bowing needs it; lifted, a string fixed at
+     * both ends cannot keep it, so a DC blocker at a sixteenth of f0 fades
+     * in at the bridge, or it would linger for seconds. */
+    b->dc_r = 1.0f - TWO_PI * f0 * 0.0625f / QUILT_SR;
+    b->tau = lp_delay(b->a, 1.15f * w0);
+    /* The bridge side is fixed: the vibrato moves the finger, on the neck
+     * side, and the bow stays where it is, so a two-point read will do. Not
+     * whole samples: on a high note that would move the bow a percent or
+     * more, onto places where the octave's motion is the steadier. */
+    {
+        const float db = fmaxf(1.0f, b->beta * b->P);
+        b->Db = (int)db;
+        b->Db_frac = db - (float)b->Db;
+    }
+
+    /* The swell: up to the key's velocity in SWELL's time, 20 ms to 1.2 s. */
+    const float swell = slot(q, inst, "b_swell", 0.3f);
+    b->lvl = 0.35f + 0.65f * v->vel;
+    b->att_k = 1.0f - expf(-1.0f / (0.02f * powf(60.0f, swell) * QUILT_SR));
+    b->rel_k = 1.0f - expf(-1.0f / (0.03f * QUILT_SR));
+    /* BITE: the first grip, a firmer bow for the first 80 ms. */
+    b->bite = slot(q, inst, "b_bite", 0.3f) * (0.3f + 0.7f * v->vel) * 1.5f;
+
+    /* SOFT: the hair, from taut and narrow to slack and wide: a wider bow
+     * rounds the slip (a low-pass on what it gives the string) and grips
+     * less. */
+    const float hair = fmaxf(12000.0f * powf(0.5f, soft), 8.0f * f0);
+    b->hair_k = 1.0f - expf(-TWO_PI * fminf(hair, 0.45f * QUILT_SR) / QUILT_SR);
+    /* Near the bridge a bow must press harder to hold the string
+     * (Schelleng); over the fingerboard it keeps its weight, or it slips
+     * twice a period and the note jumps an octave. */
+    b->force_mul = sqrtf(fmaxf(1.0f, 0.12f / b->beta));
+
+    b->level = r->gain;
+    /* The players: one, or three a little apart in pitch, place and time
+     * (WIDTH), each with a vibrato of its own. Even together they are a
+     * couple of cents apart, as players always are, so they never add up
+     * in phase. */
+    b->n = r->players;
+    const float width = r->ch == BC_WIDTH ? charv : 0.0f;
+    const float pan0 = 0.5f + 0.35f * (float)(v->note - 64) / 40.0f;
+    for (int i = 0; i < b->n; i++) {
+        bow_string_t *s = &b->s[i];
+        float k = b->n > 1 ? (float)(i - 1) : 0.0f;
+        float cents = k * (2.0f + 20.0f * width) + noise(&b->rng) * 0.5f;
+        s->detune = powf(2.0f, cents / 1200.0f);
+        float pan = fminf(fmaxf(pan0 + k * 0.35f * width, 0.0f), 1.0f);
+        s->pan_l = cosf(pan * PI * 0.5f) / sqrtf((float)b->n);
+        s->pan_r = sinf(pan * PI * 0.5f) / sqrtf((float)b->n);
+        s->vib_ph = 0.5f + 0.5f * noise(&b->rng);
+        s->vib_rate = 1.0f + 0.07f * k + 0.02f * noise(&b->rng);
+        s->onset = (b->n > 1 ? (float)i * 0.007f * width : 0.0f);
+        s->Pt = b->P / s->detune;
+    }
+}
+
+void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
+    bow_voice_t *b = &v->bow;
+    const int inst = v->inst;
+    const float dt = 1.0f / QUILT_SR;
+    const int press_src = (int)slot(q, inst, "b_press", 0.0f);   /* Pad, Auto, Blend */
+    const float noise_a = slot(q, inst, "b_noise", 0.3f);
+    /* SWAY (or the mod wheel) is the vibrato, up to 40 cents, at SPEED; it
+     * comes in after the note has spoken. */
+    const float depth = fmaxf(q->gs[G_SWAY], q->modwheel) * 40.0f / 1200.0f * 0.6931f;
+    const float vib_hz = 0.5f + 7.5f * q->gs[G_SPEED];
+    const float pk = 1.0f - expf(-1.0f / (0.012f * QUILT_SR));
+    /* The force rounds the corners of the motion (Cremer): a lighter bow,
+     * over the fingerboard (VEIL) or with slack hair (SOFT), a rounder
+     * corner reaching the bridge, so a darker note. The rounding is the
+     * corner's, once, as it reaches the bridge, so it is a smoothing of
+     * what the bridge hears, not a loss in the loop, where it would fight
+     * the bow for the motion. Worked out once a block. */
+    float rk;
+    {
+        float p0 = b->env;
+        if (v->got_press && press_src != 1)
+            p0 = press_src == 0 ? fmaxf(b->press_s, 0.25f * b->env) : 0.5f * (b->env + b->press_s);
+        const float f = fminf(1.0f, fmaxf(0.55f, (0.25f + 0.75f * p0) * b->force_mul + b->bite * expf(-b->t * 12.5f)));
+        float fc = b->f0 * 30.0f * powf(f / 0.6f, 1.5f) * powf(0.12f / b->beta, 2.0f) * powf(0.06f, q->gs[G_SOFT]);
+        fc = fminf(fmaxf(fc, 1.5f * b->f0), 0.45f * QUILT_SR);
+        rk = 1.0f - expf(-TWO_PI * fc / QUILT_SR);
+        if (!v->held) b->a = b->a_rel;
+    }
+    const float g_to = v->held ? b->g_play : b->g_rel;
+
+    /* The vibrato's period for each player at the end of this block; the
+     * read ramps to it from the last, so the sine is worked out once a
+     * block. */
+    const float bt1 = b->t + (float)frames * dt;
+    b->vib_in = fminf(1.0f, fmaxf(0.0f, (bt1 - 0.25f) * 2.5f));
+    float p_from[BOW_PLAYERS], p_step[BOW_PLAYERS];
+    for (int i = 0; i < b->n; i++) {
+        bow_string_t *s = &b->s[i];
+        s->vib_ph += vib_hz * s->vib_rate * (float)frames * dt;
+        s->vib_ph -= (float)(int)s->vib_ph;
+        float to = b->P / (s->detune * (1.0f + depth * b->vib_in * fast_sin(s->vib_ph)));
+        p_from[i] = s->Pt;
+        p_step[i] = (to - s->Pt) / (float)frames;
+        s->Pt = to;
+    }
+    float bite = b->bite * expf(-b->t * 12.5f);
+    const float bite_k = expf(-12.5f * dt);
+    const int Db = b->Db;
+    const float dbf = b->Db_frac, Dbr = (float)Db + dbf;
+    /* The neck's read moves slowly with the vibrato, so its four weights
+     * are worked out at both ends of the block and stepped between, unless
+     * it crosses a whole sample on the way. */
+    int iD[BOW_PLAYERS], ramp[BOW_PLAYERS];
+    float h[BOW_PLAYERS][4], hs[BOW_PLAYERS][4];
+    for (int i = 0; i < b->n; i++) {
+        float d0 = fmaxf(2.0f, p_from[i] + p_step[i] - Dbr - b->tau);
+        float d1 = fmaxf(2.0f, p_from[i] + p_step[i] * (float)frames - Dbr - b->tau);
+        iD[i] = (int)d0;
+        ramp[i] = (int)d1 == iD[i];
+        if (ramp[i]) {
+            float h1[4];
+            lagrange_h(d0 - (float)iD[i] + 1.0f, h[i]);
+            lagrange_h(d1 - (float)iD[i] + 1.0f, h1);
+            for (int k = 0; k < 4; k++) hs[i][k] = frames > 1 ? (h1[k] - h[i][k]) / (float)(frames - 1) : 0.0f;
+        }
+    }
+    const float dcm = b->dc_mix;
+    float peak = 0.0f;
+    for (int n = 0; n < frames; n++) {
+        /* The bow's pressure, 0..1. */
+        b->env += ((v->held ? b->lvl : 0.0f) - b->env) * (v->held ? b->att_k : b->rel_k);
+        float p = b->env;
+        if (v->got_press && press_src != 1) {
+            b->press_s += ((v->held ? v->press : 0.0f) - b->press_s) * pk;
+            /* Pad: the pad, with a quarter of the swell under it, so a held
+             * key never falls silent; Blend, half each. */
+            p = press_src == 0 ? fmaxf(b->press_s, 0.25f * b->env) : 0.5f * (b->env + b->press_s);
+        }
+        b->g += (g_to - b->g) * 0.002f;
+        bite *= bite_k;
+        const float base = (0.25f + 0.75f * p) * b->force_mul;
+        const float force = fminf(1.0f, fmaxf(0.55f, base + bite));
+        const float slope = 5.0f - 4.0f * force;
+        /* Released, the bow leaves the string in about 15 ms and lets it
+         * ring; slowing on it, it would damp it. */
+        b->lift += ((v->held ? 1.0f : 0.0f) - b->lift) * (v->held ? 1.0f : 0.0015f);
+        const float contact = fminf(1.0f, p * 6.0f) * b->lift;
+        b->dc_mix += ((v->held ? 0.0f : 1.0f) - b->dc_mix) * (v->held ? 1.0f : 0.0005f);
+        float vb = 0.22f * p * (1.0f - 0.5f * bite);
+        /* NOISE: the hair on the string, a hiss that follows the bow. */
+        float nz = noise(&b->rng);
+        b->nz_lp += (nz - b->nz_lp) * 0.3f;
+        const float hiss = (nz - b->nz_lp) * noise_a * p * contact * 0.15f;
+
+        float l = hiss * 0.7f, rr = hiss * 0.7f;
+        for (int i = 0; i < b->n; i++) {
+            bow_string_t *s = &b->s[i];
+            float b0 = s->bridge[(s->wb - Db) & (BOW_BRIDGE - 1)], b1 = s->bridge[(s->wb - Db - 1) & (BOW_BRIDGE - 1)];
+            float ob = b0 + (b1 - b0) * dbf;
+            float on;
+            if (ramp[i]) {
+                const int w = s->wn, id = iD[i], m = BOW_NECK - 1;
+                on = h[i][0] * s->neck[(w - id + 1) & m] + h[i][1] * s->neck[(w - id) & m] +
+                     h[i][2] * s->neck[(w - id - 1) & m] + h[i][3] * s->neck[(w - id - 2) & m];
+                for (int k = 0; k < 4; k++) h[i][k] += hs[i][k];
+            } else {
+                on = lagrange(s->neck, BOW_NECK - 1, s->wn, fmaxf(2.0f, p_from[i] + p_step[i] * (float)(n + 1) - Dbr - b->tau));
+            }
+            s->lz += (1.0f - b->a) * (ob - s->lz);
+            float lz = s->lz;
+            if (dcm > 0.0f) {
+                float dc = s->lz - s->dcx + b->dc_r * s->dcy;
+                s->dcx = s->lz;
+                s->dcy = dc;
+                lz += (dc - lz) * dcm;
+            }
+            float br = -b->g * lz, nr = -on;
+            float dv = vb - (br + nr);
+            float x = fabsf(dv * slope) + 0.75f, t = 1.0f / (x * x);
+            float fr = fminf(1.0f, t * t);
+            float c = b->t >= s->onset ? contact : 0.0f;
+            s->hz += (dv * fr * c - s->hz) * b->hair_k;
+            s->neck[s->wn] = br + s->hz;
+            s->bridge[s->wb] = nr + s->hz;
+            s->wn = (s->wn + 1) & (BOW_NECK - 1);
+            s->wb = (s->wb + 1) & (BOW_BRIDGE - 1);
+            s->r1 += (ob - s->r1) * rk;
+            s->r2 += (s->r1 - s->r2) * rk;
+            l += s->r2 * s->pan_l;
+            rr += s->r2 * s->pan_r;
+        }
+        const float gain = b->level * b->veil_comp * v->fade * 0.1f;
+        l *= gain;
+        rr *= gain;
+        if (v->fade_step > 0.0f) v->fade = fmaxf(0.0f, v->fade - v->fade_step);
+        float m = fmaxf(fabsf(l), fabsf(rr));
+        if (m > peak) peak = m;
+        left[n] += l;
+        right[n] += rr;
+        b->t += dt;
+    }
+    v->mv.peak = peak;
+    if ((!v->held && b->env < 1e-4f && peak < 1e-5f) || (v->fade_step > 0.0f && v->fade <= 0.0f))
+        v->active = 0;
+}
+
+/* The bowed strings' body: the direct path plus four band-passes, each up to
+ * about 12 dB at BODY full, for the last bowed instrument chosen, once for
+ * every note. */
+void bowed_body(quilt_t *q, const float *bl, const float *br, float *left, float *right, int frames) {
+    if (bowed_supports(q->type)) q->bowbody.inst = q->type;
+    const int inst = q->bowbody.inst;
+    const bow_recipe_t *r = inst >= 0 ? bow_recipe(inst) : NULL;
+    if (!r) return;
+    const float body = slot(q, inst, "b_body", 0.6f);
+    float c[4], r2[4], g[4];
+    for (int i = 0; i < 4; i++) {
+        float w = TWO_PI * r->body_hz[i] / QUILT_SR, rr = expf(-6.91f / (r->body_t60[i] * QUILT_SR));
+        c[i] = 2.0f * rr * cosf(w);
+        r2[i] = rr * rr;
+        g[i] = 4.0f * r->body_g[i] * body * (1.0f - rr);
+    }
+    for (int ch = 0; ch < 2; ch++) {
+        const float *in = ch ? br : bl;
+        float *out = ch ? right : left;
+        float (*z)[2] = q->bowbody.z[ch], *x = q->bowbody.x[ch];
+        for (int n = 0; n < frames; n++) {
+            float p = in[n], y = p;
+            for (int i = 0; i < 4; i++) {
+                float o = c[i] * z[i][0] - r2[i] * z[i][1] + g[i] * (p - x[1]);
+                z[i][1] = z[i][0];
+                z[i][0] = o;
+                y += o;
+            }
+            x[1] = x[0];
+            x[0] = p;
+            /* and nothing steady reaches the output */
+            float d = y - q->bowbody.dcx[ch] + 0.9993f * q->bowbody.dcy[ch];
+            q->bowbody.dcx[ch] = y;
+            q->bowbody.dcy[ch] = d;
+            out[n] += d;
+        }
+    }
 }

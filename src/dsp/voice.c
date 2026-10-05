@@ -22,8 +22,10 @@ static int named(int inst, const char *name) { return !strcmp(QUILT_INST[inst].n
 
 int quilt_sway_is_tremolo(int inst) {
     /* SWAY is the vibraphone fan's depth (modal.c), the organ's Leslie
-     * (fx.c) and the string machine's vibrato (banks.c), not a tremolo. */
-    return !named(inst, "Vibraphone") && !named(inst, "Tonewheel Organ") && !named(inst, "String Ensemble");
+     * (fx.c) and the string machine's and the bowed strings' vibrato
+     * (banks.c, waveguide.c), not a tremolo. */
+    return !named(inst, "Vibraphone") && !named(inst, "Tonewheel Organ") && !named(inst, "String Ensemble") &&
+           !bowed_supports(inst);
 }
 
 int quilt_sway_is_pan(int inst) {
@@ -39,7 +41,8 @@ int quilt_speed_shown(int inst) {
 }
 
 int quilt_built(int inst) {
-    return modal_supports(inst) || fm_supports(inst) || waveguide_supports(inst) || banks_supports(inst);
+    return modal_supports(inst) || fm_supports(inst) || waveguide_supports(inst) || bowed_supports(inst) ||
+           banks_supports(inst);
 }
 
 int quilt_modal_in_use(const quilt_t *q) {
@@ -80,8 +83,8 @@ static int quietest(const quilt_t *q, int except_note) {
 
 void quilt_note_on(quilt_t *q, int note, int vel) {
     if (banks_supports(q->type)) { banks_note_on(q, note, vel); return; }
-    const int fm = fm_supports(q->type), wg = waveguide_supports(q->type);
-    if (!fm && !wg && !modal_supports(q->type)) return;
+    const int fm = fm_supports(q->type), wg = waveguide_supports(q->type), bow = bowed_supports(q->type);
+    if (!fm && !wg && !bow && !modal_supports(q->type)) return;
     int slot = -1;
     for (int i = 0; i < QUILT_VOICES && slot < 0; i++)
         if (q->v[i].active && q->v[i].note == note) slot = i;
@@ -94,7 +97,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     }
 
     /* Only modal notes draw on the oscillator budget. */
-    const int modal = !fm && !wg;
+    const int modal = !fm && !wg && !bow;
     int need = modal ? modal_osc_needed(q, q->type, note) : 0;
     while (quilt_modal_in_use(q) + need > MODAL_BUDGET) {
         int victim = quietest(q, note);
@@ -115,6 +118,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     v->fade = 1.0f;
     if (fm) fm_note_on(q, v);
     else if (wg) waveguide_note_on(q, v);
+    else if (bow) bowed_note_on(q, v);
     else modal_note_on(q, v, granted);
 }
 
@@ -143,11 +147,13 @@ void quilt_all_off(quilt_t *q) {
 }
 
 void quilt_render(quilt_t *q, float *left, float *right, int frames) {
-    float board[QUILT_MAX_BLOCK], bridge[QUILT_MAX_BLOCK];
+    float board[QUILT_MAX_BLOCK], bridge[QUILT_MAX_BLOCK], bl[QUILT_MAX_BLOCK], br[QUILT_MAX_BLOCK];
     memset(left, 0, sizeof(float) * (size_t)frames);
     memset(right, 0, sizeof(float) * (size_t)frames);
     memset(board, 0, sizeof(float) * (size_t)frames);
     memset(bridge, 0, sizeof(float) * (size_t)frames);
+    memset(bl, 0, sizeof(float) * (size_t)frames);
+    memset(br, 0, sizeof(float) * (size_t)frames);
 
     /* Knobs glide over about 20 ms instead of jumping, so turning one never
      * pops. What is read per sample ramps across the block from gs_prev. */
@@ -160,9 +166,11 @@ void quilt_render(quilt_t *q, float *left, float *right, int frames) {
         if (!v->active) continue;
         if (fm_supports(v->inst)) fm_render(q, v, left, right, frames);
         else if (waveguide_supports(v->inst)) waveguide_render(q, v, left, right, bridge, frames);
+        else if (bowed_supports(v->inst)) bowed_render(q, v, bl, br, frames);
         else modal_render(q, v, left, right, board, frames);
     }
     waveguide_bank_render(q, bridge, left, right, frames);
+    bowed_body(q, bl, br, left, right, frames);
     banks_render(q, left, right, frames);
 
     /* One motor for every vibraphone note. */

@@ -19,7 +19,7 @@
 #define MODAL_MAXOSC 160        /* 72 string modes, two strings each, plus spare */
 #define MODAL_BUDGET 1536       /* oscillators across all voices; see Will it fit */
 #define QUILT_NINST 38
-#define QUILT_NTYPES 25        /* the instruments TYPE offers: those built so far */
+#define QUILT_NTYPES 28        /* the instruments TYPE offers: those built so far */
 #define QUILT_MAX_SHAPE_KEYS 16
 
 typedef enum { FAM_KEYS, FAM_MALLETS, FAM_STRINGS, FAM_GLASS, FAM_BREATH } family_t;
@@ -173,6 +173,38 @@ typedef struct {
     float fade, decay;      /* DECAY when tuned */
 } wg_bank_t;
 
+/* One bowed string: a neck side and a bridge side, the bow between them.
+ * DESIGN.md, Waveguide. The String Section bows three per note. */
+#define BOW_NECK 1024           /* down to C2, the bow at the bridge */
+#define BOW_BRIDGE 256          /* the bow up to a quarter of the way along */
+#define BOW_PLAYERS 3
+typedef struct {
+    float neck[BOW_NECK], bridge[BOW_BRIDGE];
+    int wn, wb;
+    float lz, hz;           /* the bridge's loss, the bow hair's width */
+    float dcx, dcy;         /* the bridge's DC blocker */
+    float r1, r2;           /* the corner's rounding, as the bridge hears it */
+    float detune, pan_l, pan_r, vib_ph, vib_rate, onset;
+    float Pt;               /* the period at the end of the last block, with the vibrato */
+} bow_string_t;
+
+typedef struct {
+    bow_string_t s[BOW_PLAYERS];
+    int n;
+    float f0, P, beta, tau;
+    float a, g, g_play, g_rel;   /* the loss: pole, gain now, bowed and lifted */
+    float a_rel, fb, t60, amax, cw, budget;   /* to round the corners with the force */
+    float dc_r, dc_mix;     /* the DC blocker, faded in once the bow has lifted */
+    float env, att_k, rel_k, lvl; /* the automatic swell */
+    float press_s;          /* pad pressure, smoothed */
+    float bite, t, vib_in, lift;
+    int Db;                 /* the bridge side: whole samples, and the fraction */
+    float Db_frac;   /* lift: the bow on the string, 1, to off, 0 */
+    float hair_k, force_mul, level, veil_comp;
+    float nz_lp;
+    uint32_t rng;
+} bow_voice_t;
+
 typedef struct {
     int active, held, note, inst;
     float fade, fade_step; /* ghosts only */
@@ -182,6 +214,7 @@ typedef struct {
     modal_voice_t mv;
     fm_voice_t fm;
     wg_voice_t wg;
+    bow_voice_t bow;
 } voice_t;
 
 /* The always-running banks: tonewheels, pipes and the string machine.
@@ -253,6 +286,7 @@ typedef struct {
     voice_t v[QUILT_VOICES + QUILT_GHOSTS];
     banks_t banks;
     wg_bank_t symp;
+    struct { int inst; float z[2][4][2], x[2][2], dcx[2], dcy[2]; } bowbody;   /* the bowed strings' shared body */
     fx_t fx;
     char *hierarchy, *chain_params;
     int hierarchy_len, chain_params_len;
@@ -297,6 +331,11 @@ void waveguide_note_on(quilt_t *q, voice_t *v);
 void waveguide_render(quilt_t *q, voice_t *v, float *left, float *right, float *bridge, int frames);
 void waveguide_bank_render(quilt_t *q, const float *bridge, float *left, float *right, int frames);
 void waveguide_bank_reset(wg_bank_t *b);
+int bowed_supports(int inst);
+float bowed_freq(int inst, int note);
+void bowed_note_on(quilt_t *q, voice_t *v);
+void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
+void bowed_body(quilt_t *q, const float *bl, const float *br, float *left, float *right, int frames);
 
 /* banks.c */
 int banks_supports(int inst);
