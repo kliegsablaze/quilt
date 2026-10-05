@@ -119,14 +119,67 @@ static void types(void *p) {
 }
 
 static void presets(void *p) {
-    CHECK(num(p, "preset_count") == QUILT_NTYPES, "one factory preset per instrument for now");
+    CHECK(num(p, "preset_count") == QUILT_NPRESETS, "%d factory presets", QUILT_NPRESETS);
     char idx[8];
-    snprintf(idx, sizeof(idx), "%d", quilt_type_index(quilt_instrument_by_name("Marimba")));
+    const int marimba = quilt_type_index(quilt_instrument_by_name("Marimba"));
+    snprintf(idx, sizeof(idx), "%d", marimba * QUILT_PER_TYPE);
     A->set_param(p, "preset", idx);
     CHECK(is(p, "type", "Marimba") && is(p, "preset_name", "Marimba"), "a preset sets the instrument");
     CHECK(fabs(num(p, "decay") - 0.58) < 1e-3, "and Main to suit it");
-    A->set_param(p, "preset", "38");
+    snprintf(idx, sizeof(idx), "%d", marimba * QUILT_PER_TYPE + 1);
+    A->set_param(p, "preset", idx);
+    CHECK(is(p, "type", "Marimba") && is(p, "preset_name", "Marimba Roll") &&
+          fabs(num(p, "c_marimba") - 0.6) < 1e-3 && fabs(num(p, "decay") - 0.58) < 1e-3,
+          "a variation is the default sound with its own changes");
+    snprintf(idx, sizeof(idx), "%d", QUILT_NPRESETS);
+    A->set_param(p, "preset", idx);
     CHECK(is(p, "type", "Marimba"), "a preset past the end is ignored");
+
+    /* A variation's trim, its level with no knob, comes and goes with it. */
+    int roll = -1;
+    for (int i = 0; i < QUILT_NPRESETS; i++) if (!strcmp(quilt_preset_name(i), "Marimba Roll")) roll = i;
+    snprintf(idx, sizeof(idx), "%d", roll);
+    A->set_param(p, "preset", idx);
+    const double trim = num(p, "trim");
+    CHECK(trim < -1.0, "a roll, many strikes, is trimmed down to the others' loudness (%.1f dB)", trim);
+    char *blob = strdup(get(p, "state"));
+    void *q = A->create_instance(".", "");
+    A->set_param(q, "state", blob);
+    CHECK(fabs(num(q, "trim") - trim) < 0.05, "state keeps the trim");
+    A->set_param(q, "state", "{\"v\":1,\"type\":\"Marimba\"}");
+    CHECK(num(q, "trim") == 0, "a blob from before trims has none");
+    A->destroy_instance(q);
+    free(blob);
+    A->set_param(p, "type", "Xylophone");
+    CHECK(num(p, "trim") == 0, "turning TYPE loads the default sound, untrimmed");
+
+    /* Every name fits the preset page and is its own; every change is a key
+     * of that instrument, never VOL. */
+    for (int i = 0; i < QUILT_NPRESETS; i++) {
+        const char *name = quilt_preset_name(i);
+        int ascii = 1;
+        for (const char *c = name; *c; c++) ascii &= *c >= 0x20 && *c < 0x7f;
+        CHECK(*name && strlen(name) <= 20 && ascii, "preset %d '%s' fits the screen", i, name);
+        int dup = 0;
+        for (int j = 0; j < i; j++) dup |= !strcmp(name, quilt_preset_name(j));
+        CHECK(!dup, "preset name '%s' is used once", name);
+        const int inst = quilt_type_inst(i / QUILT_PER_TYPE);
+        CHECK((i % QUILT_PER_TYPE == 0) == !*quilt_preset_changes(i),
+              "preset '%s': the first of each is the default, the others change it", name);
+        const char *c = quilt_preset_changes(i);
+        while (*c) {
+            char key[32];
+            int n = 0;
+            while (*c == ' ') c++;
+            while (*c && *c != '=' && n < 31) key[n++] = *c++;
+            key[n] = '\0';
+            if (!n) break;
+            const int g = quilt_global_index(key);
+            CHECK(!strcmp(key, "char") || !strcmp(key, "trim") || quilt_shape_key_in(QUILT_INST[inst].shape, key) >= 0 ||
+                  (g >= 0 && g != G_VOLUME), "preset '%s' changes '%s', a key it has", name, key);
+            while (*c && *c != ' ') c++;
+        }
+    }
 }
 
 /* Turning TYPE brings the instrument's whole default sound, on every page,
@@ -162,7 +215,7 @@ static void voicings(void *p) {
         const char *slug = QUILT_INST[inst].slug;
         void *ref = A->create_instance(".", "");
         char idx[8];
-        snprintf(idx, sizeof(idx), "%d", t);
+        snprintf(idx, sizeof(idx), "%d", t * QUILT_PER_TYPE);
         A->set_param(ref, "preset", idx);
         A->set_param(p, "type", QUILT_TYPE_NAMES[(t + 1) % QUILT_NTYPES]);
         dirty(p, QUILT_INST[quilt_type_inst((t + 1) % QUILT_NTYPES)].slug);
@@ -213,6 +266,8 @@ static void state(void *p) {
     CHECK(fabs(num(r, "soft") - 0.33) < 1e-3 && fabs(num(r, "m_split") - 0.9) < 1e-3,
           "state: preset then state, as the host restores, keeps the saved sound");
     A->destroy_instance(r);
+    A->set_param(q, "state", "{\"v\":1,\"type\":\"Marimba\",\"preset\":14}");
+    CHECK(num(q, "preset") == 14 * QUILT_PER_TYPE, "state: a version 1 preset is its instrument's first");
     A->set_param(q, "state", "{\"v\":7,\"future\":{\"x\":1},\"type\":\"Vibraphone\",\"soft\":\"x\"}");
     CHECK(is(q, "type", "Vibraphone"), "state: unknown keys and values are skipped");
     A->set_param(q, "state", "{\"type\":\"Banjo\"}");
@@ -224,17 +279,17 @@ static void state(void *p) {
     A->destroy_instance(q);
 }
 
-/* Every instrument sounds, stays in range, and goes quiet after release. */
+/* Every preset sounds, stays in range, and goes quiet after release. */
 static void sound(void) {
-    for (int t = 0; t < QUILT_NTYPES; t++) {
+    for (int t = 0; t < QUILT_NPRESETS; t++) {
         void *p = A->create_instance(".", "");
         char idx[8];
         snprintf(idx, sizeof(idx), "%d", t);
         A->set_param(p, "preset", idx);
-        const char *name = QUILT_TYPE_NAMES[t];
+        const char *name = quilt_preset_name(t);
         int peak = 0;
         for (int v = 0; v < 3; v++) midi3(p, 0x90, 48 + 12 * v, 40 + 40 * v);
-        double on = rms(p, 60, &peak);
+        double on = rms(p, 120, &peak);   /* 0.35 s: long enough for the slowest swell to speak */
         CHECK(on > 300, "%s sounds (rms %.0f)", name, on);
         CHECK(peak < 32767, "%s stays inside full scale (peak %d)", name, peak);
         for (int v = 0; v < 3; v++) midi3(p, 0x80, 48 + 12 * v, 0);
@@ -246,6 +301,20 @@ static void sound(void) {
         CHECK(after < 1.0 || after < start * 1e-3, "%s goes quiet after release (rms %.0f -> %.2f)", name, start, after);
         A->destroy_instance(p);
     }
+}
+
+/* The mod wheel spins the Leslie up, as SWAY does (DESIGN.md, Playing it). */
+static void wheel(void) {
+    void *p = A->create_instance(".", "");
+    A->set_param(p, "type", "Tonewheel Organ");
+    midi3(p, 0x90, 60, 100);
+    rms(p, 400, NULL);
+    const float slow = ((quilt_t *)p)->fx.horn_hz;
+    midi3(p, 0xB0, 1, 127);
+    rms(p, 400, NULL);
+    const float fast = ((quilt_t *)p)->fx.horn_hz;
+    CHECK(fast > 3.0f * slow, "the mod wheel speeds the Leslie horn (%.1f -> %.1f Hz)", slow, fast);
+    A->destroy_instance(p);
 }
 
 static void pedal(void) {
@@ -1778,6 +1847,7 @@ int main(int argc, char **argv) {
     state(p);
     sound();
     pedal();
+    wheel();
     contact();
     strings();
     bars();

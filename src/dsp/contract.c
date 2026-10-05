@@ -101,7 +101,7 @@ static void build_chain_params(sb_t *b) {
         }
     }
     sb_printf(b, ",{\"key\":\"preset\",\"name\":\"Preset\",\"type\":\"int\",\"min\":0,\"max\":%d}]",
-              QUILT_NTYPES - 1);
+              QUILT_NPRESETS - 1);
 }
 
 static void key_list(sb_t *b, const char *first, const param_def_t *keys, int n) {

@@ -46,10 +46,26 @@ void quilt_reset_instrument(quilt_t *q, int inst) {
     }
 }
 
-/* A factory preset, one per TYPE option, and what turning TYPE does: the
- * instrument with its whole default sound on every page. Only VOL stays. */
+/* "key=value" pairs onto an instrument: its CHAR, its own page, and Main or
+ * Effects by name. VOL is never touched. */
+static void apply_pairs(quilt_t *q, int inst, const char *pairs) {
+    const shape_t s = QUILT_INST[inst].shape;
+    char key[24];
+    float v;
+    for (const char *p = pairs; next_pair(&p, key, sizeof(key), &v);) {
+        int g = quilt_global_index(key), i = quilt_shape_key_in(s, key);
+        if (!strcmp(key, "char")) q->charv[inst] = v;
+        else if (!strcmp(key, "trim")) q->trim = fminf(fmaxf(v, -12.0f), 12.0f);
+        else if (i >= 0) q->slot[inst][i] = v;
+        else if (g >= 0 && g != G_VOLUME) q->g[g] = v;
+    }
+}
+
+/* A factory preset: the instrument with its whole default sound on every
+ * page, then the preset's own changes. Turning TYPE loads the instrument's
+ * first preset, which has none. Only VOL stays. */
 void quilt_apply_preset(quilt_t *q, int preset) {
-    const int inst = quilt_type_inst(preset);
+    const int inst = quilt_type_inst(preset / QUILT_PER_TYPE);
     const instrument_t *in = &QUILT_INST[inst];
     q->preset = preset;
     q->type = inst;
@@ -60,12 +76,9 @@ void quilt_apply_preset(quilt_t *q, int preset) {
     q->g[G_DECAY] = in->decay;
     q->g[G_SWAY] = in->sway;
     q->g[G_SPACE] = in->space;
-    char key[24];
-    float v;
-    for (const char *p = quilt_voicing(inst); next_pair(&p, key, sizeof(key), &v);) {
-        int g = quilt_global_index(key);
-        if (g >= 0 && g != G_VOLUME) q->g[g] = v;
-    }
+    q->trim = 0.0f;
+    apply_pairs(q, inst, quilt_voicing(inst));
+    apply_pairs(q, inst, quilt_preset_changes(preset));
 }
 
 static void *create_instance(const char *module_dir, const char *json_defaults) {
@@ -80,6 +93,7 @@ static void *create_instance(const char *module_dir, const char *json_defaults) 
     q->bowbody.inst = -1;
     quilt_apply_preset(q, 0);
     memcpy(q->gs, q->g, sizeof(q->g));
+    q->trim_g = 1.0f;
     q->fx.pre_s = 1.0f + q->g[G_DELAY] * 0.1f * QUILT_SR;
     if (quilt_build_contracts(q) != 0) {
         free(q);
@@ -127,17 +141,18 @@ static void set_param(void *instance, const char *key, const char *val) {
         /* A new instrument arrives with its own default sound; writing the
          * one already chosen changes nothing, so a repeated write is safe. */
         if (t < 0) fprintf(stderr, "quilt: rejected type '%s'\n", val);
-        else if (t != q->type) quilt_apply_preset(q, quilt_type_index(t));
+        else if (t != q->type) quilt_apply_preset(q, quilt_type_index(t) * QUILT_PER_TYPE);
         return;
     }
     if (!strcmp(key, "preset")) {
         int i = atoi(val);
-        if (i >= 0 && i < QUILT_NTYPES) quilt_apply_preset(q, i);
+        if (i >= 0 && i < QUILT_NPRESETS) quilt_apply_preset(q, i);
         return;
     }
     if (!strcmp(key, "state")) {
         quilt_read_state(q, val);
         memcpy(q->gs, q->g, sizeof(q->g));   /* a recalled patch starts where it was saved */
+        q->trim_g = powf(10.0f, q->trim / 20.0f);
         q->fx.pre_s = 1.0f + q->g[G_DELAY] * 0.1f * QUILT_SR;
         return;
     }
@@ -175,9 +190,10 @@ static int get_param(void *instance, const char *key, char *buf, int buf_len) {
     if (!strcmp(key, "type"))
         return quilt_format_value(&QUILT_TYPE_PARAM, (float)quilt_type_index(q->type), buf, buf_len);
     if (!strcmp(key, "preset")) return snprintf(buf, (size_t)buf_len, "%d", q->preset);
-    if (!strcmp(key, "preset_count")) return snprintf(buf, (size_t)buf_len, "%d", QUILT_NTYPES);
+    if (!strcmp(key, "trim")) return snprintf(buf, (size_t)buf_len, "%.1f", (double)q->trim);
+    if (!strcmp(key, "preset_count")) return snprintf(buf, (size_t)buf_len, "%d", QUILT_NPRESETS);
     if (!strcmp(key, "preset_name")) {
-        const char *name = QUILT_TYPE_NAMES[q->preset];
+        const char *name = quilt_preset_name(q->preset);
         return put(buf, buf_len, name, (int)strlen(name));
     }
     int g = quilt_global_index(key);
@@ -224,7 +240,10 @@ static void render_block(void *instance, int16_t *out, int frames) {
     for (int done = 0; done < frames;) {
         int n = frames - done < QUILT_MAX_BLOCK ? frames - done : QUILT_MAX_BLOCK;
         quilt_render(q, l, r, n);
-        const float g0 = volume_gain(q->gs_prev[G_VOLUME]), g1 = volume_gain(q->gs[G_VOLUME]);
+        /* VOL, and the preset's trim gliding about 20 ms to a new preset's. */
+        const float t0 = q->trim_g;
+        q->trim_g += (powf(10.0f, q->trim / 20.0f) - t0) * (1.0f - expf(-(float)n / (0.02f * QUILT_SR)));
+        const float g0 = volume_gain(q->gs_prev[G_VOLUME]) * t0, g1 = volume_gain(q->gs[G_VOLUME]) * q->trim_g;
         for (int i = 0; i < n; i++) {
             float gain = g0 + (g1 - g0) * (float)(i + 1) / (float)n;
             out[2 * (done + i)] = limit(l[i] * gain);

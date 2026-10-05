@@ -4,11 +4,13 @@
  * it sets each value directly and never loads a voicing, so a saved sound
  * comes back exactly (DESIGN.md, Every instrument starts beautiful).
  *
- *   {"v":1,"type":"Marimba","preset":3,"soft":0.6000,...,
+ *   {"v":2,"type":"Marimba","preset":42,"soft":0.6000,...,
  *    "c_felt_upright":0.5000,...,"marimba.m_spot":0.3000,...}
  *
  * The reader is one pass over "key":value pairs and ignores keys it does not
- * know, so older and newer blobs both load.
+ * know, so older and newer blobs both load. Version 1 had one preset per
+ * instrument, so its "preset" is a TYPE index; it maps to that instrument's
+ * first preset.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,9 +31,10 @@ static void put(out_t *o, const char *fmt, const char *key, double v) {
 
 int quilt_write_state(const quilt_t *q, char *buf, int buf_len) {
     out_t o = { buf, 0, buf_len };
-    int n = snprintf(buf, (size_t)buf_len, "{\"v\":1,\"type\":\"%s\",\"preset\":%d",
+    int n = snprintf(buf, (size_t)buf_len, "{\"v\":2,\"type\":\"%s\",\"preset\":%d",
                      QUILT_INST[q->type].name, q->preset);
     o.len = (n < 0 || n >= buf_len) ? -1 : n;
+    put(&o, ",\"%s\":%.1f", "trim", q->trim);
     for (int i = 0; i < G_COUNT; i++) put(&o, ",\"%s\":%.4f", QUILT_GLOBALS[i].key, q->g[i]);
     for (int t = 0; t < QUILT_NTYPES; t++) {
         int i = quilt_type_inst(t);
@@ -56,7 +59,8 @@ int quilt_write_state(const quilt_t *q, char *buf, int buf_len) {
 
 static float clampf(float x, float lo, float hi) { return x < lo ? lo : (x > hi ? hi : x); }
 
-static void apply(quilt_t *q, const char *key, int klen, const char *sval, int slen, float num, int is_num) {
+static void apply(quilt_t *q, int *ver, const char *key, int klen, const char *sval, int slen, float num,
+                  int is_num) {
     char k[96];
     if (klen <= 0 || klen >= (int)sizeof(k)) return;
     memcpy(k, key, (size_t)klen);
@@ -76,10 +80,13 @@ static void apply(quilt_t *q, const char *key, int klen, const char *sval, int s
         return;
     }
     if (!is_num) return;
+    if (!strcmp(k, "v")) { *ver = (int)num; return; }
     if (!strcmp(k, "preset")) {
-        if (num >= 0 && num < QUILT_NTYPES) q->preset = (int)num;
+        if (*ver < 2) num *= QUILT_PER_TYPE;
+        if (num >= 0 && num < QUILT_NPRESETS) q->preset = (int)num;
         return;
     }
+    if (!strcmp(k, "trim")) { q->trim = clampf(num, -12.0f, 12.0f); return; }
     int g = quilt_global_index(k);
     if (g >= 0) { q->g[g] = clampf(num, QUILT_GLOBALS[g].min, QUILT_GLOBALS[g].max); return; }
     if (!strncmp(k, "c_", 2)) {
@@ -102,7 +109,9 @@ static void apply(quilt_t *q, const char *key, int klen, const char *sval, int s
 
 void quilt_read_state(quilt_t *q, const char *s) {
     const char *p = strchr(s, '{');
+    int ver = 1;
     if (!p) return;
+    q->trim = 0.0f;   /* a blob carries its own trim, and one from before trims has none */
     p++;
     for (;;) {
         while (*p && *p != '"' && *p != '}') p++;
@@ -117,7 +126,7 @@ void quilt_read_state(quilt_t *q, const char *s) {
             const char *val = ++p;
             while (*p && *p != '"') p++;
             if (!*p) return;
-            apply(q, key, klen, val, (int)(p - val), 0.0f, 0);
+            apply(q, &ver, key, klen, val, (int)(p - val), 0.0f, 0);
             p++;
         } else {
             char *end;
@@ -133,7 +142,7 @@ void quilt_read_state(quilt_t *q, const char *s) {
                     else if (*p == ',' && depth == 0) break;
                 }
             } else {
-                apply(q, key, klen, NULL, 0, num, 1);
+                apply(q, &ver, key, klen, NULL, 0, num, 1);
                 p = end;
             }
         }

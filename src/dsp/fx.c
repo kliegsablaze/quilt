@@ -78,8 +78,9 @@ static inline float tap(const float *buf, int mask, int w, int k) { return buf[(
 
 /* The Leslie (Smith, Serafin, Abel & Berners; Herrera, Hanson & Abel).
  * Below 800 Hz the drum, above it the horn. Each rotor's speed chases SWAY's
- * place between its slow and fast speeds, the light horn in under a second,
- * the heavy drum in about five, and slower to stop than to start. As the
+ * place between its slow and fast speeds (or the mod wheel's, if further
+ * up), the light horn in under a second, the heavy drum in about five, and
+ * slower to stop than to start. As the
  * horn turns, its sound comes nearer and goes (a delay swinging about half a
  * millisecond), louder and brighter facing the microphone. */
 static void leslie(quilt_t *q, float *left, float *right, int frames) {
@@ -87,7 +88,7 @@ static void leslie(quilt_t *q, float *left, float *right, int frames) {
     const int inst = q->type;
     const float slow = q->slot[inst][quilt_shape_key_in(SH_ORGAN, "o_slow")];
     const float fast = q->slot[inst][quilt_shape_key_in(SH_ORGAN, "o_fast")];
-    const float sway = q->gs[G_SWAY];
+    const float sway = fmaxf(q->gs[G_SWAY], q->modwheel);   /* the mod wheel works it too */
     const float hs = 0.4f + 1.2f * slow, hf = 5.0f + 3.0f * fast;
     const float th = hs + (hf - hs) * sway, td = (hs + (hf - hs) * sway) * 0.84f;
     const float dt = (float)frames / QUILT_SR;

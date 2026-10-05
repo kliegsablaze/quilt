@@ -84,6 +84,12 @@ int quilt_instrument_by_name(const char *name);       /* -1 if none */
 int quilt_type_inst(int t);         /* TYPE option -> instrument */
 int quilt_type_index(int inst);     /* instrument -> TYPE option, or -1 if not offered */
 const char *quilt_voicing(int inst);   /* "key=value" pairs; see instruments.c */
+/* Factory presets, QUILT_PER_TYPE per TYPE option in TYPE's order: the first
+ * is the instrument's default sound, the others change it (presets.c). */
+#define QUILT_PER_TYPE 3
+#define QUILT_NPRESETS (QUILT_NTYPES * QUILT_PER_TYPE)
+const char *quilt_preset_name(int preset);
+const char *quilt_preset_changes(int preset);   /* "key=value" pairs over the voicing */
 int quilt_instrument_by_slug(const char *slug, int len);
 int quilt_global_index(const char *key);
 int quilt_shape_key_count(shape_t s);
@@ -364,6 +370,7 @@ typedef struct {
 
 typedef struct {
     int type, preset;
+    float trim, trim_g;   /* the preset's level in dB, no knob (presets.c); its gain as heard */
     float g[G_COUNT];               /* as set */
     float gs[G_COUNT], gs_prev[G_COUNT];   /* as heard: gliding toward g, this block and last */
     float charv[QUILT_NINST];

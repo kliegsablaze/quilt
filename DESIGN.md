@@ -19,7 +19,8 @@ Guitar, Hammered Dulcimer, Pizzicato, Solo Cello, Solo Violin, String Section,
 Bowed Vibes, Glass Harmonica, Singing Bowl, Flute, Pan Flute, Ocarina, Recorder,
 Clarinet and Choir. **`TYPE` offers an instrument only once its engine is built**,
 so nothing on the Move is a stand-in. Each instrument arrives with its own
-default sound on every page (see *Every instrument starts beautiful*).
+default sound on every page (see *Every instrument starts beautiful*), and
+has two more factory presets, 114 in all, with on-device help (`help.json`).
 
 **Module ID:** `quilt` — slot abbreviation `QLT`
 **Component type:** `sound_generator`. It lives in a Signal Chain synth slot. It is
@@ -988,10 +989,30 @@ the Vibraphone.
 
 **Picking an instrument.** `TYPE` steps through the instruments built so far, in
 family order: today the thirty-seven named at the top of this document. The jog
-wheel browses **presets** on the Main page; for now there is one per instrument, its
-default sound. At 1.0 the presets become the catalogue: 38 instruments × 3 = 114,
-named *Family · Instrument · Variation*, for example *Mallets · Vibraphone · Motor
-Off*.
+wheel browses **presets** on the Main page: **114, three per instrument**, in
+`TYPE`'s order (`presets.c`). The first of each is the instrument's default sound,
+named after it, and is what turning `TYPE` loads. The other two each name a
+familiar way of playing it (*Vibes Motor Off*, *Chimes Muted*, *Organ Jazz Perc*,
+*Cello Auto Bow*) and change only what that needs, as `key=value` pairs over the
+voicing. For the bowed, rubbed and blown instruments one of the two is usually an
+*Auto* preset, which holds a note steady however hard the pad is pressed.
+
+- **Names are twenty plain characters at most, the instrument's word first.** The
+  preset page draws the name in capitals in the 6 px cell font across 120 px, so
+  twenty fit, and it folds anything outside ASCII (`·` would draw as `?`).
+  (Rejected: *Family · Instrument · Variation*, as first planned here. At twice
+  the width it lost the variation, the part you are looking for.)
+- **Every preset plays at the defaults' loudness**, −26.5 LUFS on the test
+  phrase (all 114 within ±0.3 LU). A variation carries a **trim**, its own level
+  in dB with no knob, set by measurement: from −6.9 dB for the mallet rolls,
+  which strike many times, to +6.8 dB for *Violin Sul Tasto*. It is applied with
+  `VOL`, glides about 20 ms, is saved in `state`, and turning `TYPE` sets it back
+  to 0. (Rejected: re-voicing each variation until it matched, which undoes the
+  change that makes it a variation; and leaving them unmatched, which makes
+  browsing a hunt for `VOL`.)
+- **Older saved sounds.** Version 1 of `state` had one preset per instrument, so
+  its `preset` was a `TYPE` index; it now maps to that instrument's first preset,
+  and a blob without a trim has none.
 
 ### Every instrument starts beautiful
 
@@ -999,7 +1020,7 @@ Off*.
 `CHAR`, the Instrument page and Effects. Only `VOL` stays where you left it. The
 user asked for this on 2026-10-04: each engine, when chosen, should sound
 gorgeous out of the box, before any knob is touched. The default sound is the same
-as the instrument's factory preset.
+as the instrument's first factory preset.
 
 It replaces an earlier rule, *each instrument keeps its own settings*, under which
 leaving the cello and coming back found the cello as you left it. That rule meant
@@ -1697,9 +1718,12 @@ ring: the whole block must still fit. It is worst on the Una Corda Grand, at
    user's listening: ~~noise recoloured~~ (*Noise that belongs to the note*),
    ~~crackling at note starts fixed~~ (*No pops*), and ~~every default tuned
    against recordings~~ (*Close to the real thing*). String Section and the
-   Choir were then made cheaper (*Will it fit*). 1,177 checks pass. Next: the
-   114 factory presets, `help.json`, and the catalog entry. **Release 1.0: all
-   thirty-eight.**
+   Choir were then made cheaper (*Will it fit*). 1,177 checks pass.
+   ~~The 114 factory presets~~ (*Picking an instrument*) ~~and `help.json`~~,
+   **done** 2026-10-05; the mod wheel now spins the Leslie too, as the table in
+   *Playing it with the Move* always said. 2,027 checks pass. Next: the
+   catalog entry. **Release 1.0: all thirty-eight** waits on the user's
+   go-ahead.
 9. Device revision: cut the pages after the first look.
 
 Unbuilt, in rough order of what they would add:
@@ -1745,6 +1769,13 @@ module black-box through the v2 API, as `chain_host` would.
   same values as its factory preset, leaves `VOL` alone, and a repeated write
   changes nothing. `state` recalled after `preset`, as the host does it, keeps
   the saved sound.
+- **Presets.** All 114 sound, stay inside full scale and fall quiet after
+  release. Each name fits the preset page and is used once; each change names a
+  key its instrument has, never `VOL`; a trim comes and goes with its preset and
+  survives `state`. The loudness itself is measured, not tested: the trims were
+  set from the same −26.5 LUFS phrase as the voicings.
+- **Help.** `tests/help_lint.mjs` keeps every line of `help.json` to twenty
+  ASCII characters, and every topic reachable.
 - **No pops.** Every Main and Effects knob jumped end to end under a sounding
   note adds no spike beyond the note's own. Four notes struck hard together peak
   below −3 dBFS on every instrument.

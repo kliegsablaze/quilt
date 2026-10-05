@@ -19,8 +19,9 @@ rc=0
 
 if command -v node >/dev/null 2>&1; then
   node tests/plan.test.mjs "$out" "$SCHWUNG" || rc=$?
+  node tests/help_lint.mjs || rc=$?
 else
-  echo "FAIL: node is not on PATH (tests/plan.test.mjs)"
+  echo "FAIL: node is not on PATH (tests/plan.test.mjs, tests/help_lint.mjs)"
   rc=1
 fi
 

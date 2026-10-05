@@ -18,5 +18,6 @@ else
     docker run --rm -v "$PWD:/build" -w /build "$IMAGE" sh -c "$CC_CMD"
 fi
 
-cp src/module.json dist/quilt/module.json
+# help.json is what puts "Module Help" one jog from the controls.
+cp src/module.json src/help.json dist/quilt/
 echo "Built dist/quilt/"
