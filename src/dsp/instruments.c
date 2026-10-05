@@ -197,10 +197,11 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
  * catalogue's order, when its sound is done; tests check the two agree. */
 const char *const QUILT_TYPE_NAMES[QUILT_NTYPES] = {
     "Felt Upright", "Una Corda Grand", "Electric Grand", "Clavichord", "Tine Piano", "Reed Piano",
-    "Celesta", "Toy Piano", "Tonewheel Organ", "Flute Organ", "Glass E.Piano", "String Ensemble",
+    "Celesta", "Toy Piano", "Tonewheel Organ", "Flute Organ", "Harmonium", "Glass E.Piano", "String Ensemble",
     "Vibraphone", "Marimba", "Xylophone", "Glockenspiel", "Tubular Bells", "Handbells",
     "Handpan", "Tongue Drum", "Kalimba / Music Box", "Harp", "Nylon Guitar", "Hammered Dulcimer",
     "Pizzicato", "Solo Cello", "Solo Violin", "String Section",
+    "Flute", "Pan Flute", "Ocarina", "Recorder", "Clarinet",
 };
 
 const param_def_t QUILT_TYPE_PARAM = {
@@ -310,6 +311,24 @@ static const struct { const char *name, *values; } VOICINGS[] = {
     /* A section in a hall, the players a little apart. */
     { "String Section", "char=0.5 b_body=0.6 b_edge=0.4 b_press=0 b_swell=0.3 b_noise=0.2 b_bite=0.2 "
                         "size=0.7 dark=0.45 delay=0.25 speed=0.62" },
+    /* A flute in a warm hall, the lip a little over the hole, a gentle vibrato. */
+    { "Flute", "char=0.3 a_onset=0.3 a_edge=0.45 a_press=0 a_swell=0.2 a_air=0.3 "
+               "size=0.6 dark=0.45 delay=0.2 speed=0.65" },
+    /* Stopped cane pipes, breathy, with their puff. */
+    { "Pan Flute", "char=0.5 a_onset=0.25 a_edge=0.4 a_press=0 a_swell=0.2 a_air=0.25 "
+                   "size=0.65 dark=0.45 delay=0.25 speed=0.55" },
+    /* A clay vessel, nearly a pure tone, a slow vibrato. */
+    { "Ocarina", "char=0.5 a_onset=0.3 a_edge=0.4 a_press=0 a_swell=0.1 a_air=0.35 "
+                 "size=0.55 dark=0.45 delay=0.2 speed=0.55" },
+    /* A wooden recorder: steady, sweet, a little chiff. */
+    { "Recorder", "char=0.4 a_onset=0.35 a_edge=0.45 a_press=0 a_swell=0.15 a_air=0.3 "
+                  "size=0.5 dark=0.5 delay=0.15 speed=0.5" },
+    /* The chalumeau: a soft reed, low breath. */
+    { "Clarinet", "char=0.3 a_onset=0.3 a_edge=0.4 a_press=0 a_swell=0.2 a_air=0.3 "
+                  "size=0.55 dark=0.5 delay=0.18 speed=0.55" },
+    /* A harmonium in a small room, the céleste half in (Nico). */
+    { "Harmonium", "char=0.4 a_onset=0.2 a_edge=0.4 a_press=0 a_swell=0.3 a_air=0.3 "
+                   "size=0.4 dark=0.5 delay=0.1 speed=0.4" },
     /* Rosewood and yarn, nearly dry. */
     { "Marimba", "char=0 m_split=0.05 m_body=0.75 m_damp=0 m_noise=0.32 "
                  "size=0.45 dark=0.5 delay=0.15 tone=0.52" },

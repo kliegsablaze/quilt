@@ -481,19 +481,19 @@ typedef struct {
 static const bow_recipe_t BOW_RECIPES[] = {
     /* The cello's air mode near 100 Hz, its first wood modes either side of
      * 200 Hz, and the bridge's broad hill. */
-    { .name = "Solo Cello", .gain = 0.983f, .lowest = 36,
+    { .name = "Solo Cello", .gain = 1.02f, .lowest = 36,
       .t60_ref = 3.0f, .f_ref = 130.8f, .t60_slope = 0.5f, .fb_mult = 0.8f,
       .body_hz = { 105, 185, 220, 1600 }, .body_t60 = { 0.10f, 0.06f, 0.06f, 0.006f },
       .body_g = { 0.8f, 0.7f, 0.7f, 0.5f }, .players = 1, .ch = BC_VEIL },
     /* The violin's: air at 280 Hz, the main wood modes near 500, the
      * bridge hill at 2.5 kHz. */
-    { .name = "Solo Violin", .gain = 1.06f, .lowest = 55,
+    { .name = "Solo Violin", .gain = 1.1f, .lowest = 55,
       .t60_ref = 2.0f, .f_ref = 392.0f, .t60_slope = 0.5f, .fb_mult = 1.0f,
       .body_hz = { 280, 460, 530, 2500 }, .body_t60 = { 0.08f, 0.05f, 0.05f, 0.005f },
       .body_g = { 0.8f, 0.7f, 0.7f, 0.6f }, .players = 1, .ch = BC_VEIL },
     /* Three players a note, through one hall body between the cello's and
      * the violin's. */
-    { .name = "String Section", .gain = 1.01f, .lowest = 36,
+    { .name = "String Section", .gain = 1.05f, .lowest = 36,
       .t60_ref = 2.5f, .f_ref = 196.0f, .t60_slope = 0.5f, .fb_mult = 0.9f,
       .body_hz = { 150, 300, 500, 2000 }, .body_t60 = { 0.08f, 0.05f, 0.05f, 0.006f },
       .body_g = { 0.7f, 0.6f, 0.6f, 0.5f }, .players = 3, .ch = BC_WIDTH },
@@ -626,7 +626,7 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         if (v->got_press && press_src != 1)
             p0 = press_src == 0 ? fmaxf(b->press_s, 0.25f * b->env) : 0.5f * (b->env + b->press_s);
         const float f = fminf(1.0f, fmaxf(0.55f, (0.25f + 0.75f * p0) * b->force_mul + b->bite * expf(-b->t * 12.5f)));
-        float fc = b->f0 * 30.0f * powf(f / 0.6f, 1.5f) * powf(0.12f / b->beta, 2.0f) * powf(0.06f, q->gs[G_SOFT]);
+        float fc = b->f0 * 30.0f * powf(f / 0.6f, 2.5f) * powf(0.12f / b->beta, 2.0f) * powf(0.025f, q->gs[G_SOFT]);
         fc = fminf(fmaxf(fc, 1.5f * b->f0), 0.45f * QUILT_SR);
         rk = 1.0f - expf(-TWO_PI * fc / QUILT_SR);
         if (!v->held) b->a = b->a_rel;

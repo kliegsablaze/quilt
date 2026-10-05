@@ -114,7 +114,7 @@ static void types(void *p) {
     CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "type by float index");
     A->set_param(p, "type", "Banjo");
     CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "an unknown type is ignored");
-    A->set_param(p, "type", "Flute");
+    A->set_param(p, "type", "Choir");
     CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "an instrument not built yet is not offered");
     A->set_param(p, "type", "99");
     CHECK(is(p, "type", QUILT_TYPE_NAMES[QUILT_NTYPES - 1]), "an index past the end clamps to the last");
@@ -297,6 +297,7 @@ static void *note(const char *type, int key, int vel, int frames, int release_at
     A->set_param(p, "p_body", "0");
     A->set_param(p, "b_noise", "0");
     A->set_param(p, "b_body", "0");
+    A->set_param(p, "a_air", "0");
     for (const char *e = extra; e && *e;) {           /* "key=value;key=value" */
         char k[32], v[32];
         int n = 0;
@@ -342,12 +343,17 @@ static double rms_at(int a, int n) {
     return sqrt(acc / n);
 }
 
-/* Spectral centroid, 50 Hz to 8 kHz, of 4096 samples from 10 ms in. */
-static double centroid(void) {
+/* Spectral centroid, 50 Hz to 8 kHz, of 4096 samples from a. */
+static double centroid_at(int a) {
     double num = 0, den = 0;
-    for (double f = 50; f < 8000; f += 25) { double m = mag(441, 4096, f); num += m * f; den += m; }
+    for (double f = 50; f < 8000; f += 25) { double m = mag(a, 4096, f); num += m * f; den += m; }
     return num / den;
 }
+static double cur_f0;                       /* the note measured, Hz */
+static double band(double lo, double hi);   /* energy between lo and hi */
+
+/* From 10 ms in: the strike. */
+static double centroid(void) { return centroid_at(441); }
 
 static void contact(void) {
     /* Chaigne & Askenfelt's C4 hammer and string: as velocity rises, contact
@@ -417,25 +423,44 @@ static void softness(void) {
      * that softens (FELT, HUSH). */
     const char *const *types = QUILT_TYPE_NAMES;
     for (int i = 0; i < QUILT_NTYPES; i++) {
-        /* At full volume: a soft note at -24 dB would sit on the 16-bit floor. */
-        void *p = note(types[i], 60, 30, 8192, -1, "volume=0;c_felt_upright=0;c_kalimba_music_box=0;c_hammered_dulcimer=0");
-        double soft = centroid();
-        A->destroy_instance(p);
-        p = note(types[i], 60, 120, 8192, -1, "volume=0;c_felt_upright=0;c_kalimba_music_box=0;c_hammered_dulcimer=0");
-        double hard = centroid();
-        A->destroy_instance(p);
-        if (banks_supports(quilt_type_inst(i)))
-            CHECK(fabs(soft - hard) < 1, "%s: has no touch, so velocity leaves the tone alone (%.0f Hz, %.0f Hz)",
-                  types[i], soft, hard);
+        /* A struck or plucked note at its strike, 10 ms in, by its
+         * spectral centroid. A held one (bow, breath) once it has spoken,
+         * 0.4 s in, past the attack's noise, by its overtones against its
+         * fundamental: a nearly pure tone's centroid hardly leaves f0,
+         * however far its overtones fall. (The overtones from the 2nd up
+         * move less than the upper ones each engine's own tests measure,
+         * so the held minimums here are 2 and 4 dB.) */
+        const int inst = quilt_type_inst(i);
+        const int held = QUILT_SHAPES[QUILT_INST[inst].shape].sustained;
+        const int at = held ? 17640 : 441, len = at + 8192 + 128;
+        cur_f0 = held && air_supports(inst) ? air_freq(inst, 60) : held && bowed_supports(inst) ? bowed_freq(inst, 60) : 261.63;
+        double v[4];
+        const char *xs[4] = { "volume=0;c_felt_upright=0;c_kalimba_music_box=0;c_hammered_dulcimer=0",
+                              "volume=0;c_felt_upright=0;c_kalimba_music_box=0;c_hammered_dulcimer=0",
+                              "soft=0.95;volume=0;c_kalimba_music_box=0", "soft=0.05;volume=0;c_kalimba_music_box=0" };
+        const int vels[4] = { 30, 120, 90, 90 };
+        for (int k = 0; k < 4; k++) {
+            void *p = note(types[i], 60, vels[k], len, -1, xs[k]);
+            if (!held) v[k] = centroid_at(at);
+            else {
+                /* The harmonics themselves, 2nd to 12th, not the band: SOFT
+                 * also makes a wind breathier, and that noise is not tone. */
+                double e = 0;
+                for (int h = 2; h <= 12; h++) e += pow(mag(at, 8192, cur_f0 * h), 2);
+                v[k] = 10 * log10(e + 1e-30) - 20 * log10(mag(at, 8192, cur_f0) + 1e-30);
+            }
+            A->destroy_instance(p);
+        }
+        if (banks_supports(inst))
+            CHECK(fabs(v[0] - v[1]) < 1, "%s: has no touch, so velocity leaves the tone alone (%.1f, %.1f)", types[i], v[0], v[1]);
+        else if (!held)
+            CHECK(v[0] < v[1] * 0.9, "%s: soft strike darker (%.0f Hz) than hard (%.0f Hz)", types[i], v[0], v[1]);
         else
-            CHECK(soft < hard * 0.9, "%s: soft strike darker (%.0f Hz) than hard (%.0f Hz)", types[i], soft, hard);
-        p = note(types[i], 60, 90, 8192, -1, "soft=0.95;volume=0;c_kalimba_music_box=0");
-        double felt = centroid();
-        A->destroy_instance(p);
-        p = note(types[i], 60, 90, 8192, -1, "soft=0.05;volume=0;c_kalimba_music_box=0");
-        double bare = centroid();
-        A->destroy_instance(p);
-        CHECK(felt < bare * 0.9, "%s: SOFT darkens (%.0f Hz vs %.0f Hz)", types[i], felt, bare);
+            CHECK(v[0] < v[1] - 2, "%s: a gentle touch at least 2 dB darker held (overtones %.1f dB vs %.1f dB)", types[i], v[0], v[1]);
+        if (!held || banks_supports(inst))
+            CHECK(v[2] < v[3] * 0.9 || (held && v[2] < v[3] - 6), "%s: SOFT darkens (%.1f vs %.1f)", types[i], v[2], v[3]);
+        else
+            CHECK(v[2] < v[3] - 4, "%s: SOFT darkens the held note at least 4 dB (overtones %.1f dB vs %.1f dB)", types[i], v[2], v[3]);
     }
     void *p = note("Felt Upright", 60, 90, 8192, -1, "c_felt_upright=1;volume=0");
     double strip = centroid();
@@ -1269,6 +1294,149 @@ static void bowed(void) {
     }
 }
 
+/* ---- the winds ---- */
+
+/* The overtones, from the second harmonic up, against the fundamental, in
+ * the held note, as bands. */
+static double m_overtones(void) {
+    return 10 * log10(band(cur_f0 * 1.5, cur_f0 * 12.5) / band(cur_f0 * 0.5, cur_f0 * 1.5) + 1e-30);
+}
+
+/* A pipe overblows to its octave, a clarinet to its twelfth: by 1 s, never
+ * more alike after a half or a third of a period than after a whole one,
+ * less 0.1, on every key, SOFT, CHAR and touch. */
+static void registers(void) {
+    static const char *const wd[6] = { "Flute", "Pan Flute", "Ocarina", "Recorder", "Clarinet", "Harmonium" };
+    int bad = 0, n = 0;
+    char what[120] = "";
+    for (int i = 0; i < 6; i++) {
+        char ck[48];
+        snprintf(ck, sizeof(ck), "c_%s", QUILT_INST[quilt_instrument_by_name(wd[i])].slug);
+        for (int key = 48; key <= 96; key += 6)
+            for (int sf = 0; sf <= 2; sf++)
+                for (int c = 0; c <= 2; c++)
+                    for (int vel = 30; vel <= 127; vel += 97) {
+                        char x[120];
+                        snprintf(x, sizeof(x), "volume=0;soft=%g;%s=%g", sf * 0.5, ck, c * 0.5);
+                        cur_f0 = air_freq(quilt_instrument_by_name(wd[i]), key);
+                        void *p = note(wd[i], key, vel, 44100 + 4410 + 2048, -1, x);
+                        int l[3] = { (int)(QUILT_SR / cur_f0 + 0.5), (int)(QUILT_SR / cur_f0 / 2 + 0.5), (int)(QUILT_SR / cur_f0 / 3 + 0.5) };
+                        double r[3], e0 = 0;
+                        for (int k = 44100; k < 44100 + 4410; k++) e0 += wave[k] * wave[k];
+                        for (int j = 0; j < 3; j++) {
+                            double c2 = 0, e1 = 0;
+                            for (int k = 44100; k < 44100 + 4410; k++) { c2 += wave[k] * wave[k + l[j]]; e1 += wave[k + l[j]] * wave[k + l[j]]; }
+                            r[j] = c2 / sqrt(e0 * e1 + 1e-30);
+                        }
+                        n++;
+                        if ((r[1] > r[0] - 0.1 || r[2] > r[0] - 0.1) && !bad++)
+                            snprintf(what, sizeof(what), "%s key %d soft %.1f char %.1f vel %d (%.2f %.2f %.2f)", wd[i], key,
+                                     sf * 0.5, c * 0.5, vel, r[0], r[1], r[2]);
+                        A->destroy_instance(p);
+                    }
+    }
+    CHECK(!bad, "the winds hold their register on all %d settings, never the octave or the twelfth (%d bad; first %s)",
+          n, bad, what);
+}
+
+static double m_early(void) { return db(rms_at(441, 1323)); }
+/* As m_line, but at the strongest line within 1 % of the harmonic, so a
+ * note a few cents off its nominal pitch is still measured on its line. */
+static double m_line_peak(void) {
+    double f = peak_near(22050, 44100, cur_f0 * cur_ratio, cur_f0 * cur_ratio * 0.01);
+    return db(mag(22050, 44100, f)) - db(rms_at(22050, 44100));
+}
+
+static void winds(void) {
+    static const char *const wd[6] = { "Flute", "Pan Flute", "Ocarina", "Recorder", "Clarinet", "Harmonium" };
+    double a0, a1, d;
+    for (int i = 0; i < 6; i++) {
+        const char *t = wd[i];
+        const int inst = quilt_instrument_by_name(t);
+        char ck[48], base[96];
+        snprintf(ck, sizeof(ck), "c_%s", QUILT_INST[inst].slug);
+        snprintf(base, sizeof(base), "volume=0;c_harmonium=0;c_flute=0");
+        /* TONE on one partial, as for the other instruments: the 4th, or
+         * the 3rd where the even ones are missing. */
+        const double tk = (!strcmp(t, "Clarinet") || !strcmp(t, "Pan Flute")) ? 3 : 4;
+        double worst = 0;
+        for (int key = 60; key <= 96; key += 12) {
+            cur_f0 = air_freq(inst, key);
+            void *p = note(t, key, 90, 22050 + 16384, -1, base);
+            double c = m_pitch();
+            if (fabs(c) > fabs(worst)) worst = c;
+            A->destroy_instance(p);
+        }
+        CHECK(fabs(worst) < 3, "%s: in tune from C4 to C7 (worst %+.1f cents)", t, worst);
+
+        cur_f0 = air_freq(inst, 72);
+        d = turn(t, 72, 90, 22050 + 8192, -1, base, "soft", m_overtones, &a0, &a1);
+        CHECK(d < -12, "%s SOFT: the overtones fall at least 12 dB (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 72, 90, 44100, -1, base, "soft", m_held, &a0, &a1);
+        CHECK(fabs(d) < 10, "%s SOFT: changes the tone more than the level (%+.1f dB)", t, d);
+        d = turn(t, 72, 90, 44100, 22050, base, "decay", m_release, &a0, &a1);
+        CHECK(d > 20, "%s DECAY: a released note sounds at least 20 dB longer (%.1f -> %.1f dB)", t, a0, a1);
+        cur_f0 = air_freq(inst, 60);
+        cur_ratio = tk;
+        d = turn(t, 60, 90, 22050 + 8192, -1, base, "tone", m_late, &a0, &a1);
+        {
+            double h[2];
+            for (int e = 0; e < 2; e++) {
+                char x[120];
+                snprintf(x, sizeof(x), "%s;tone=%d", base, e);
+                void *p = note(t, 60, 90, 22050 + 8192, -1, x);
+                h[e] = part_db(22050, 8192, cur_f0 * tk) - part_db(22050, 8192, cur_f0);
+                A->destroy_instance(p);
+            }
+            CHECK((h[1] - h[0]) / log2(tk) > 4, "%s TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB over %.1f octaves)",
+                  t, h[0], h[1], log2(tk));
+        }
+        cur_f0 = air_freq(inst, 72);
+        /* EDGE on the upper overtones, the 5th up, as for the bow: a
+         * jet's 2nd comes from where it strikes the edge, not the bore. */
+        d = turn(t, 72, 90, 22050 + 8192, -1, base, "a_edge", m_upper, &a0, &a1);
+        CHECK(d > 6, "%s EDGE: the upper overtones at least 6 dB up (%.1f -> %.1f dB)", t, a0, a1);
+        d = burst(t, "volume=0;c_harmonium=0;c_pan_flute=0;c_recorder=0", "a_onset");
+        CHECK(d > -14, "%s ONSET: the tongue is heard, %.1f dB against the note", t, d);
+        d = turn(t, 60, 90, 22050, -1, "volume=0;a_onset=0;c_pan_flute=0;c_recorder=0", "a_swell", m_early, &a0, &a1);
+        CHECK(d < -12, "%s SWELL: the breath swells in, at least 12 dB quieter at 30 ms (%.1f -> %.1f dB)", t, a0, a1);
+        d = hiss(t, base, "a_air");
+        CHECK(d > -20, "%s AIR: the breath is heard, %.1f dB against the note", t, d);
+        a0 = bowed_at(t, 15, "volume=0;a_press=0;c_harmonium=0");
+        a1 = bowed_at(t, 127, "volume=0;a_press=0;c_harmonium=0");
+        CHECK(a1 - a0 > 10, "%s PRESS Pad: the pad is the breath, at least 10 dB from light to full (%.1f -> %.1f dB)", t, a0, a1);
+        a0 = bowed_at(t, 15, "volume=0;a_press=1;c_harmonium=0");
+        a1 = bowed_at(t, 127, "volume=0;a_press=1;c_harmonium=0");
+        CHECK(fabs(a1 - a0) < 1, "%s PRESS Auto: the pad changes nothing (%.1f -> %.1f dB)", t, a0, a1);
+        if (air_sway_is_vibrato(inst)) {
+            cur_ratio = 3;
+            d = turn(t, 72, 100, 44100 * 2, -1, base, "sway", m_line_peak, &a0, &a1);
+            CHECK(d < -6, "%s SWAY: the vibrato spreads the third harmonic at least 6 dB (%.1f -> %.1f dB)", t, a0, a1);
+        } else {
+            d = turn(t, 60, 100, 44100 * 3, -1, "volume=0;speed=0.4;c_harmonium=0", "sway", m_wobble, &a0, &a1);
+            /* Up to 2 dB at zero: 10 ms frames cut a pulse-shaped wave at
+             * different places, and its level reads unevenly. */
+            CHECK(a1 > 6 && a0 < 2.0, "%s SWAY: the tremulant wobbles the note at least 6 dB (%.1f -> %.1f dB)", t, a0, a1);
+        }
+    }
+    /* The CHAR cells. */
+    cur_f0 = air_freq(quilt_instrument_by_name("Flute"), 72);
+    d = turn("Flute", 72, 90, 22050 + 8192, -1, "volume=0", "c_flute", m_upper, &a0, &a1);
+    CHECK(d < -8, "Flute COVER: the lip over the hole takes at least 8 dB off the upper overtones (%.1f -> %.1f dB)", a0, a1);
+    d = burst("Pan Flute", "volume=0;a_onset=0", "c_pan_flute");
+    CHECK(d > -14, "Pan Flute PUFF: the chiff is heard, %.1f dB against the note", d);
+    d = burst("Recorder", "volume=0;a_onset=0", "c_recorder");
+    CHECK(d > -14, "Recorder PUFF: the chiff is heard, %.1f dB against the note", d);
+    cur_f0 = air_freq(quilt_instrument_by_name("Ocarina"), 72);
+    d = turn("Ocarina", 72, 90, 22050 + 8192, -1, "volume=0", "c_ocarina", m_overtones, &a0, &a1);
+    CHECK(d < -12, "Ocarina PURE: the overtones at least 12 dB down (%.1f -> %.1f dB)", a0, a1);
+    cur_f0 = air_freq(quilt_instrument_by_name("Clarinet"), 60);
+    d = turn("Clarinet", 60, 90, 22050 + 8192, -1, "volume=0", "c_clarinet", m_overtones, &a0, &a1);
+    CHECK(d < -6, "Clarinet REED: a harder reed is darker, the overtones at least 6 dB down (%.1f -> %.1f dB)", a0, a1);
+    d = turn("Harmonium", 60, 90, 44100 * 3, -1, "volume=0;decay=1", "c_harmonium", m_wobble, &a0, &a1);
+    CHECK(a1 > 3 && a1 > a0 + 2, "Harmonium BEAT: the céleste beats (wobble %.1f -> %.1f dB)", a0, a1);
+}
+
 /* The reverb alone: the same note with and without the plate, subtracted.
  * Everything else is deterministic, so what is left is the plate. */
 static float wet[44100 * 4];
@@ -1451,6 +1619,8 @@ int main(int argc, char **argv) {
     plucked();
     bowed();
     octaves();
+    winds();
+    registers();
     effects();
     clicks();
     cost();

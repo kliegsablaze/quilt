@@ -19,7 +19,7 @@
 #define MODAL_MAXOSC 160        /* 72 string modes, two strings each, plus spare */
 #define MODAL_BUDGET 1536       /* oscillators across all voices; see Will it fit */
 #define QUILT_NINST 38
-#define QUILT_NTYPES 28        /* the instruments TYPE offers: those built so far */
+#define QUILT_NTYPES 34        /* the instruments TYPE offers: those built so far */
 #define QUILT_MAX_SHAPE_KEYS 16
 
 typedef enum { FAM_KEYS, FAM_MALLETS, FAM_STRINGS, FAM_GLASS, FAM_BREATH } family_t;
@@ -205,6 +205,21 @@ typedef struct {
     uint32_t rng;
 } bow_voice_t;
 
+/* One blown voice: a bore and a jet, a cavity, or a free reed. DESIGN.md, Air. */
+#define AIR_BORE 1024           /* the bore, a period and a half at B3 */
+#define AIR_JET 512
+typedef struct {
+    float bore[AIR_BORE], jet[AIR_JET];
+    int bw, jw;
+    float f0, D, Dj;        /* the bore's and the jet's delays */
+    float lp, lpa, dcx, dcy;
+    float cav_c, cav_r2, cav_g, cav_y1, cav_y2;   /* the vessel, or the reed chamber */
+    float ph[2], inc[2], swing, speak_k, rank2;   /* the free reed and its céleste */
+    float env, att_k, rel_k, lvl, press_s, onset, chiff;
+    float nz_lp, vib_ph, t, level, pan_l, pan_r, jlp, jk, js, jamp, offset, jet_mul, noise_out, flow_lp, soft_k, jet_th, comp, rlp2, surge, fc, over, soft_eff, edge, charv;
+    uint32_t rng;
+} air_voice_t;
+
 typedef struct {
     int active, held, note, inst;
     float fade, fade_step; /* ghosts only */
@@ -215,6 +230,7 @@ typedef struct {
     fm_voice_t fm;
     wg_voice_t wg;
     bow_voice_t bow;
+    air_voice_t air;
 } voice_t;
 
 /* The always-running banks: tonewheels, pipes and the string machine.
@@ -336,6 +352,13 @@ float bowed_freq(int inst, int note);
 void bowed_note_on(quilt_t *q, voice_t *v);
 void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
 void bowed_body(quilt_t *q, const float *bl, const float *br, float *left, float *right, int frames);
+
+/* air.c */
+int air_supports(int inst);
+int air_sway_is_vibrato(int inst);
+float air_freq(int inst, int note);
+void air_note_on(quilt_t *q, voice_t *v);
+void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
 
 /* banks.c */
 int banks_supports(int inst);
