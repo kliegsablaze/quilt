@@ -5,6 +5,7 @@
  * 2902 us block. "onset us" is the worst block in which a chord of four
  * starts while twelve notes ring, stealing as it must: the whole block,
  * starting the notes and rendering, must fit in one block or audio drops.
+ * Names given on the command line bench only those instruments.
  */
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
@@ -22,7 +23,7 @@ static double now_us(void) {
     return (double)t.tv_sec * 1e6 + (double)t.tv_nsec / 1e3;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     plugin_api_v2_t *a = move_plugin_init_v2(NULL);
     int16_t out[256];
     printf("%-18s %6s %8s %8s %7s %9s\n", "instrument", "osc", "mean us", "worst us", "block", "onset us");
@@ -47,6 +48,11 @@ int main(void) {
             continue;
         }
         if (i >= QUILT_NTYPES) break;
+        if (argc > 1) {
+            int want = 0;
+            for (int k = 1; k < argc; k++) want |= !strcmp(argv[k], QUILT_TYPE_NAMES[i]);
+            if (!want) continue;
+        }
         void *p = a->create_instance(".", "");
         char idx[8];
         snprintf(idx, sizeof(idx), "%d", i);

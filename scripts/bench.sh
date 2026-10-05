@@ -18,4 +18,6 @@ else
 fi
 
 scp -q build/bench-aarch64 "$HOST:/tmp/quilt-bench"
-ssh "$HOST" "/tmp/quilt-bench; rm -f /tmp/quilt-bench"
+args=""
+for a in "$@"; do args="$args '$a'"; done
+ssh "$HOST" "/tmp/quilt-bench$args; rm -f /tmp/quilt-bench"

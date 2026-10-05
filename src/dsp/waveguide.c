@@ -683,33 +683,52 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         }
     }
     const float dcm = b->dc_mix;
+    const int np = b->n;
+    /* What changes sample by sample, kept out of memory: the strings'
+     * writes could otherwise be any of it. */
+    const int held = v->held;
+    const float press = v->press, fade_step = v->fade_step, one_a = 1.0f - b->a;
+    const float gain0 = b->level * b->veil_comp * 0.1f;
+    float env = b->env, press_s = b->press_s, g = b->g, lift = b->lift, dc_mix = b->dc_mix, bt = b->t, fade = v->fade;
+    tint_t nzt = b->nz_t;
+    uint32_t rng = b->rng;
+    struct { float lz, hz, dcx, dcy, r1, r2, pl, pr, onset; } st[BOW_PLAYERS];
+    for (int i = 0; i < np; i++) {
+        const bow_string_t *s = &b->s[i];
+        st[i].lz = s->lz, st[i].hz = s->hz, st[i].dcx = s->dcx, st[i].dcy = s->dcy, st[i].r1 = s->r1, st[i].r2 = s->r2;
+        st[i].pl = s->pan_l, st[i].pr = s->pan_r, st[i].onset = s->onset;
+    }
+    const int use_press = v->got_press && press_src != 1;
+    const float env_to = held ? b->lvl : 0.0f, env_k = held ? b->att_k : b->rel_k;
+    const float force_mul = b->force_mul, tau = b->tau, dc_r = b->dc_r, hair_k = b->hair_k;
     float peak = 0.0f;
     for (int n = 0; n < frames; n++) {
         /* The bow's pressure, 0..1. */
-        b->env += ((v->held ? b->lvl : 0.0f) - b->env) * (v->held ? b->att_k : b->rel_k);
-        float p = b->env;
-        if (v->got_press && press_src != 1) {
-            b->press_s += ((v->held ? v->press : 0.0f) - b->press_s) * pk;
+        env += (env_to - env) * env_k;
+        float p = env;
+        if (use_press) {
+            press_s += ((held ? press : 0.0f) - press_s) * pk;
             /* Pad: the pad, with a quarter of the swell under it, so a held
              * key never falls silent; Blend, half each. */
-            p = press_src == 0 ? fmaxf(b->press_s, 0.25f * b->env) : 0.5f * (b->env + b->press_s);
+            p = press_src == 0 ? fmaxf(press_s, 0.25f * env) : 0.5f * (env + press_s);
         }
-        b->g += (g_to - b->g) * 0.002f;
+        g += (g_to - g) * 0.002f;
         bite *= bite_k;
-        const float base = (0.25f + 0.75f * p) * b->force_mul;
+        const float base = (0.25f + 0.75f * p) * force_mul;
         const float force = fminf(1.0f, fmaxf(0.55f, base + bite));
         const float slope = 5.0f - 4.0f * force;
         /* Released, the bow leaves the string in about 15 ms and lets it
          * ring; slowing on it, it would damp it. */
-        b->lift += ((v->held ? 1.0f : 0.0f) - b->lift) * (v->held ? 1.0f : 0.0015f);
-        const float contact = fminf(1.0f, p * 6.0f) * b->lift;
-        b->dc_mix += ((v->held ? 0.0f : 1.0f) - b->dc_mix) * (v->held ? 1.0f : 0.0005f);
+        lift += ((held ? 1.0f : 0.0f) - lift) * (held ? 1.0f : 0.0015f);
+        const float contact = fminf(1.0f, p * 6.0f) * lift;
+        dc_mix += ((held ? 0.0f : 1.0f) - dc_mix) * (held ? 1.0f : 0.0005f);
         float vb = 0.22f * p * (1.0f - 0.5f * bite);
         /* NOISE: the hair on the string, a hiss that follows the bow. */
-        const float hiss = tint(&b->nz_t, noise(&b->rng)) * noise_a * p * contact * 0.15f;
+        const float hiss = tint(&nzt, noise(&rng)) * noise_a * p * contact * 0.15f;
 
         float l = hiss * 0.7f, rr = hiss * 0.7f;
-        for (int i = 0; i < b->n; i++) {
+        const float cbow = contact;
+        for (int i = 0; i < np; i++) {
             bow_string_t *s = &b->s[i];
             float b0 = s->bridge[(s->wb - Db) & (BOW_BRIDGE - 1)], b1 = s->bridge[(s->wb - Db - 1) & (BOW_BRIDGE - 1)];
             float ob = b0 + (b1 - b0) * dbf;
@@ -720,40 +739,46 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
                      h[i][2] * s->neck[(w - id - 1) & m] + h[i][3] * s->neck[(w - id - 2) & m];
                 for (int k = 0; k < 4; k++) h[i][k] += hs[i][k];
             } else {
-                on = lagrange(s->neck, BOW_NECK - 1, s->wn, fmaxf(2.0f, p_from[i] + p_step[i] * (float)(n + 1) - Dbr - b->tau));
+                on = lagrange(s->neck, BOW_NECK - 1, s->wn, fmaxf(2.0f, p_from[i] + p_step[i] * (float)(n + 1) - Dbr - tau));
             }
-            s->lz += (1.0f - b->a) * (ob - s->lz);
-            float lz = s->lz;
+            float lz = st[i].lz += one_a * (ob - st[i].lz);
             if (dcm > 0.0f) {
-                float dc = s->lz - s->dcx + b->dc_r * s->dcy;
-                s->dcx = s->lz;
-                s->dcy = dc;
+                float dc = lz - st[i].dcx + dc_r * st[i].dcy;
+                st[i].dcx = lz;
+                st[i].dcy = dc;
                 lz += (dc - lz) * dcm;
             }
-            float br = -b->g * lz, nr = -on;
+            float br = -g * lz, nr = -on;
             float dv = vb - (br + nr);
             float x = fabsf(dv * slope) + 0.75f, t = 1.0f / (x * x);
             float fr = fminf(1.0f, t * t);
-            float c = b->t >= s->onset ? contact : 0.0f;
-            s->hz += (dv * fr * c - s->hz) * b->hair_k;
-            s->neck[s->wn] = br + s->hz;
-            s->bridge[s->wb] = nr + s->hz;
+            float c = bt >= st[i].onset ? cbow : 0.0f;
+            st[i].hz += (dv * fr * c - st[i].hz) * hair_k;
+            s->neck[s->wn] = br + st[i].hz;
+            s->bridge[s->wb] = nr + st[i].hz;
             s->wn = (s->wn + 1) & (BOW_NECK - 1);
             s->wb = (s->wb + 1) & (BOW_BRIDGE - 1);
-            s->r1 += (ob - s->r1) * rk;
-            s->r2 += (s->r1 - s->r2) * rk;
-            l += s->r2 * s->pan_l;
-            rr += s->r2 * s->pan_r;
+            st[i].r1 += (ob - st[i].r1) * rk;
+            st[i].r2 += (st[i].r1 - st[i].r2) * rk;
+            l += st[i].r2 * st[i].pl;
+            rr += st[i].r2 * st[i].pr;
         }
-        const float gain = b->level * b->veil_comp * v->fade * 0.1f;
+        const float gain = gain0 * fade;
         l *= gain;
         rr *= gain;
-        if (v->fade_step > 0.0f) v->fade = fmaxf(0.0f, v->fade - v->fade_step);
+        if (fade_step > 0.0f) fade = fmaxf(0.0f, fade - fade_step);
         float m = fmaxf(fabsf(l), fabsf(rr));
         if (m > peak) peak = m;
         left[n] += l;
         right[n] += rr;
-        b->t += dt;
+        bt += dt;
+    }
+    b->env = env, b->press_s = press_s, b->g = g, b->lift = lift, b->dc_mix = dc_mix, b->t = bt, v->fade = fade;
+    b->nz_t = nzt;
+    b->rng = rng;
+    for (int i = 0; i < np; i++) {
+        bow_string_t *s = &b->s[i];
+        s->lz = st[i].lz, s->hz = st[i].hz, s->dcx = st[i].dcx, s->dcy = st[i].dcy, s->r1 = st[i].r1, s->r2 = st[i].r2;
     }
     v->peak = peak;
     if ((!v->held && b->env < 1e-4f && peak < 1e-5f) || (v->fade_step > 0.0f && v->fade <= 0.0f))

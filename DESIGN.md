@@ -8,16 +8,17 @@ request. The first request was "a wider palette, more soft sounds". The second w
 sounds". It has grown from four keyboards to **thirty-eight instruments in five
 families**, built on six engines. **The modal engine is built** (build steps 3
 and 4), and so are the banks and the FM voice (step 5), the waveguide
-engine, plucked and bowed (step 6), and the air and banded engines (step 7):
-thirty-seven instruments play, with the shared effects, measured on the Move.
+engine, plucked and bowed (step 6), the air and banded engines (step 7), and the
+formant voice (step 8): all thirty-eight instruments play, with the shared
+effects, measured on the Move.
 They are Felt Upright, Una Corda Grand, Electric Grand, Clavichord, Tine Piano,
 Reed Piano, Celesta, Toy Piano, Tonewheel Organ, Flute Organ, Harmonium, Glass
 E.Piano, String Ensemble, Vibraphone, Marimba, Xylophone, Glockenspiel, Tubular
 Bells, Handbells, Handpan, Tongue Drum, Kalimba / Music Box, Harp, Nylon
 Guitar, Hammered Dulcimer, Pizzicato, Solo Cello, Solo Violin, String Section,
-Bowed Vibes, Glass Harmonica, Singing Bowl, Flute, Pan Flute, Ocarina, Recorder
-and Clarinet. The last instrument, the Choir, has its page and labels in place, but **`TYPE` does not offer them until their engine is
-built**, so nothing on the Move is a stand-in. Each instrument arrives with its own
+Bowed Vibes, Glass Harmonica, Singing Bowl, Flute, Pan Flute, Ocarina, Recorder,
+Clarinet and Choir. **`TYPE` offers an instrument only once its engine is built**,
+so nothing on the Move is a stand-in. Each instrument arrives with its own
 default sound on every page (see *Every instrument starts beautiful*).
 
 **Module ID:** `quilt` — slot abbreviation `QLT`
@@ -756,10 +757,30 @@ velocity changes nothing.
     `SOFT` scales them a decade either way of the middle and gives the attack
     up to 8 ms. It rings 5 s at middle C, shorter up the keys, `DECAY` a
     factor of 4 either way; released, 0.3 s.
-- **Choir.** Each singer is a soft glottal pulse with jitter and breath noise
-  through a Klatt-style cascade of five formant resonators. `VOWEL` morphs oo →
-  oh → ah. Three singers per note, each detuned and drifting on its own, make a
-  section, not a chorus effect.
+- **Choir.** Built 2026-10-05 (`choir.c`). Each singer is a glottal pulse: a
+  band-limited sum of harmonics falling away geometrically, in Moorer's closed
+  form, so no harmonic ever folds back. Its slope is set by how gently the note
+  is sung: a soft voice's upper harmonics fall fast. Breath noise rides on the
+  pulse, strongest while the folds are open (`AIR`).
+  - **The tract.** The singers of a note go through a Klatt cascade of five
+    formant resonators, one cascade per ear, the two ears' tracts 2.5 % longer
+    and shorter. The first singer goes into both, the second into the left and
+    the third into the right, so three singers are a section, wide and a little
+    unalike, and one sits in the middle. The formants come from the bass, tenor,
+    alto and soprano tables for the note's register; `VOWEL` morphs oo → oh →
+    ah. Above the first formant a singer opens it up to the note.
+  - **Each singer** has its own detune (`SPLIT`, up to 14 cents either side), its
+    own slow drift, and its own vibrato a little apart from the others' (`SWAY`,
+    at `SPEED`, coming in after 0.3 s). `CROWD` is one, two or three singers;
+    more are wider, not louder.
+  - **Breath** is pad pressure, or the automatic swell (`PRESS`, `SWELL`), as for
+    the winds, and a stronger breath sings brighter. Keys below C2 or above C6
+    sound an octave in.
+  - **Cost.** The three singers run side by side in one NEON vector. Each pulse
+    needs the fundamental's phase and the top harmonic's, and both now turn by
+    a fixed step through the block, set afresh from the phase at its start, in
+    place of four sines a sample. That took it from 35 % of the block on the
+    Move to 12 %.
 
 ### Shared effects
 
@@ -1030,8 +1051,12 @@ key. Any Effects key not named takes its shared default.
 | Bowed Vibes | A bass bow on the bars, slow and pure | SOFT 60, GRIP 50, DECAY 60, SPACE 35 | BOW 40, BLUR 15, HIT 0, PRESS Pad, SWELL 35, NOISE 20 | SIZE 65 (3.1 s), DARK 40, DELAY 25 |
 | Glass Harmonica | Franklin's glass, a wet finger | SOFT 70, WET 50, DECAY 50, SPACE 35 | BOW 40, BLUR 10, HIT 0, PRESS Pad, SWELL 30, NOISE 15 | SIZE 65 (3.1 s), DARK 40, DELAY 25 |
 | Singing Bowl | A bowl struck lightly, then rubbed, its pairs beating slowly | SOFT 60, BEAT 40, DECAY 65, SPACE 35 | BOW 35, BLUR 10, HIT 40, PRESS Pad, SWELL 40, NOISE 15 | SIZE 70 (3.2 s), DARK 40, DELAY 30 |
+| Choir | A small chamber choir on "oo", three to a note, in a church | SOFT 60, VOWEL 25, DECAY 50, SWAY 20, SPACE 45 | CROWD 3, AIR 30, SWELL 40, PRESS Pad, SPLIT 30 | SIZE 70 (3.2 s), DARK 45, DELAY 20, SPEED 45 |
 
-Values are percentages; the times are the plate's measured ring (RT60).
+Values are percentages; the times are the plate's measured ring (RT60). They are
+the voicings as first set; the changes of 2026-10-05 (*Close to the real thing*,
+and the noise knobs' new taper in *Noise that belongs to the note*) moved some,
+and `instruments.c` holds the exact values.
 
 **They are equally loud.** Switching instruments must not jump in level. Each
 instrument's own gain is set so the same phrase (a gentle chord, a line over it, a
@@ -1057,6 +1082,50 @@ its phrase loudness within a decibel of the others.
 one per tick, so the new values appear within about 0.2 s (`page_controller.mjs`,
 the value rotation). A knob turned in that moment steps from its old value. This
 was judged acceptable; the host has no call for a module to ask for a re-read.
+
+### Close to the real thing
+
+On 2026-10-05 the user asked that every default sound be **as close as possible
+to the real instrument**. Each voicing was compared with recordings from the
+University of Iowa Musical Instrument Samples (free for any use; fifteen files,
+downloaded with the user's permission, kept out of the repo). The comparison was
+measured, not only heard: how fast each note falls in its first second and how
+long it rings, where its partials sit, its vibrato's rate and depth.
+
+- **Pianos.** A real piano falls fast and then sings on (the double decay): middle
+  C about 20 dB down in 0.66 s, then a long aftersound. Ours had fallen evenly.
+  The unison strings are now detuned a little more and the prompt decay is
+  steeper (about 0.9 s to −20 dB), with the aftersound held.
+- **Vibraphone.** It rings 5.6 s at C5 with the motor off (real: 5.2 s), and its
+  fourth partial is in its place.
+- **Marimba.** Purer, and darker down the keys, as the recordings are. Middle C
+  matches. The swell of its resonator in the first tens of milliseconds is not
+  modelled.
+- **Nylon guitar** rounder (`EDGE` 20); **violin** bowed in the normal place
+  (`VEIL` 40), brighter, though still short of the recording; **pizzicato**
+  shorter (`DECAY` 65).
+- **Flute** vibrato about 4.2 Hz and ±10 cents, as a player's; the **clarinet**
+  without vibrato, as it is played classically. The flute is still darker than
+  the recording at mezzo-forte, which needs engine work.
+- **Tubular bells** and **handpan** ring as long as theirs.
+
+All were loudness-matched again at −26.5 LUFS.
+
+### Noise that belongs to the note
+
+The user found on 2026-10-05 that on most engines the noise sounded bad, and that
+turning it off made them better. It was white noise, or nearly, and it fizzed
+above the note instead of sitting inside it.
+
+**Every engine's noise now passes through one colouring** (`tint_t` in
+`quilt.h`). It is a band-pass at the noise's own place, with two one-pole
+low-passes above it, so it falls 24 dB per octave above that place. The place is
+each source's own: a key's thump low, a bow's hair or a flute's breath near the
+note's third harmonic (0.5 to 2 kHz), a flute's chiff near its fifth. It is never
+above 6 kHz. The Choir's breath needs none: it goes through the singers' own
+formants. The noise knobs
+also turn on a square (`noise_amount`), so their low half is fine control, and the
+defaults were rescaled to keep their sound.
 
 ### Every knob is heard
 
@@ -1130,6 +1199,12 @@ the sound by at least a set amount**, measured on a middle C:
 | SWELL, NOISE (banded) | At least 12 dB quieter at 150 ms (a bowed object takes that long to speak); the friction at no less than −20 dB |
 | GRIP, WET, BEAT | At least 6 dB more; the overtones at least 6 dB down; a wah of at least 3 dB |
 | Hold (banded) | All 486 settings repeat their period and sound by 1 s |
+| **Choir:** tuning | Every C from C3 to C6 within 3 cents, one singer |
+| SOFT (choir) | The overtones from the fifth harmonic up at least 12 dB down (the second sits on the first formant whatever the slope); the level within 10 dB |
+| VOWEL | Oo to ah, the held note's spectral centroid at least half as high again |
+| CROWD, SPLIT | Three singers, the channels at least 0.2 less alike; the singers beat, a wobble of more than 3 dB |
+| SWELL, AIR, PRESS (choir) | As for the winds |
+| SWAY (choir) | The vibrato spreads the fourth harmonic at least 6 dB |
 | Touch, held (bow and winds) | A gentle touch at least 2 dB darker in its harmonics, and SOFT at least 4 dB, measured 0.4 s in (a nearly pure tone's centroid hardly leaves f₀) |
 | SIZE | The room rings at least 20 dB longer at 2 s |
 | DARK | The room's tail at least 6 dB darker, heard on the Electric Grand, hard, pickups full up (once on a hard Felt Upright, whose brightness there was partly the contact ringing up; see *Stable at any setting*) |
@@ -1165,6 +1240,23 @@ fixed and each tested:
   milliseconds. When all eight are busy, the most-faded ghost is reused, so no
   note is ever cut off.
 
+The user heard crackling as notes began on some instruments on 2026-10-05. There
+were three more causes, each fixed:
+
+- **The winds** worked out their bore's length, its loss and the jet once a block
+  and jumped to them at the block's start. With the vibrato on they jumped every
+  block. Each now glides across the block, the bore read at both lengths and
+  crossfaded.
+- **The flute organ's** chiff began at full height; it now rises in 1.5 ms. A key
+  struck again while still sounding comes back up from where it is, instead of
+  from silence.
+- **Dampers and the hand.** A released note's damper (modal) and the guitarist's
+  hand (waveguide) used to stop the string in a single sample; they now settle
+  over 40 ms.
+
+A survey of every instrument now flags only what belongs to it: a pluck, a bow's
+slip, a sawtooth's corner, the organ's key click, the kalimba's buzz.
+
 ### Main (`root`): the same eight knobs for everything
 
 ```
@@ -1181,7 +1273,7 @@ example `FELT`, `VEIL` or `PUFF`.
 | `SOFT` | `soft` | 0–100 % | **The contact.** Hammer, mallet or fingertip hardness for struck and plucked instruments. Bow hair tension and friction for bowed. Breath softness (more noise, less edge) for blown. Drawbar brightness for the organ. Attack softness for the synthetic voices. |
 | *(CHAR)* | `c_felt_upright`, `c_una_corda_grand`, … | 0–100 % | The active instrument's signature, from the CHAR column above. The cell carries that instrument's own word (`FELT`, `VEIL`, `AIR`…); see below for how. It is on Main only. |
 | `DECAY` | `decay` | 0–100 % | Losses and ring time for struck and plucked. Release for sustained. |
-| `SWAY` | `sway` | 0–100 % | Motion. Auto-pan for keys and mallets (a tremolo in one channel on the Reed Piano, the tremulant on the Flute Organ), the vibraphone fan's depth, vibrato for the string machine, bowed and blown, the Leslie from slow to fast for the organ, ensemble depth for the choir. |
+| `SWAY` | `sway` | 0–100 % | Motion. Auto-pan for keys and mallets (a tremolo in one channel on the Reed Piano, the tremulant on the Flute Organ), the vibraphone fan's depth, vibrato for the string machine, bowed and blown, and for each singer of the choir, the Leslie from slow to fast for the organ. |
 | `TONE` | `tone` | 0–100 % | Tilts the whole sound: a shelf about 600 Hz (±10 dB at the ends) and a gentler one about 3 kHz (±8 dB), so it is heard on a glockenspiel as well as a piano. The middle is flat. |
 | `SPACE` | `space` | 0–100 % | How much goes to the plate reverb: full up sends 1.75 times the dry sound. |
 | `VOL` | `volume` | −60 to +6 dB | Output level, before the headroom and the limiter. The one knob `TYPE` leaves alone. |
@@ -1384,50 +1476,51 @@ when the pool is full the quietest note is stolen with a short fade. The cost ca
 never exceed the budget, whatever is played. The budget is **1,536 oscillators**
 (`MODAL_BUDGET`).
 
-**Measured on the Move** (2026-10-04, host 1.6.3, `scripts/bench.sh`), as a share
+**Measured on the Move** (2026-10-05, host 1.6.3, `scripts/bench.sh`), as a share
 of the 2,902 µs block. Each instrument is at its worst: sixteen notes held low,
 with the pedal down and the plate on.
 
 | Instrument | Mean | Mean, µs |
 |---|---|---|
-| Felt Upright | **14.5 %** | 420 |
-| Electric Grand | 14.4 % | 417 |
-| Hammered Dulcimer | 13.9 % | 403 |
-| Una Corda Grand | 13.7 % | 399 |
-| Vibraphone | 7.1 % | 207 |
-| Tine Piano | 6.9 % | 201 |
-| Kalimba / Music Box | 6.1 % | 177 |
-| Reed Piano | 5.7 % | 166 |
-| Handbells | 5.0 % | 145 |
-| Marimba | 4.9 % | 141 |
-| Xylophone | 4.8 % | 138 |
-| Glockenspiel | 4.8 % | 140 |
-| Handpan | 4.7 % | 137 |
-| Tubular Bells | 4.6 % | 133 |
-| Celesta | 4.0 % | 116 |
-| Tongue Drum | 3.8 % | 111 |
+| Felt Upright | **15.5 %** | 448 |
+| Electric Grand | 13.1 % | 379 |
+| Hammered Dulcimer | 13.4 % | 389 |
+| Una Corda Grand | 14.9 % | 433 |
+| Vibraphone | 6.7 % | 194 |
+| Tine Piano | 7.5 % | 217 |
+| Kalimba / Music Box | 5.8 % | 168 |
+| Reed Piano | 5.6 % | 164 |
+| Handbells | 5.0 % | 146 |
+| Marimba | 5.4 % | 157 |
+| Xylophone | 5.0 % | 144 |
+| Glockenspiel | 5.0 % | 144 |
+| Handpan | 4.8 % | 138 |
+| Tubular Bells | 4.8 % | 140 |
+| Celesta | 4.4 % | 127 |
+| Tongue Drum | 3.9 % | 114 |
 | Toy Piano | 2.9 % | 83 |
-| Glass E.Piano | 12.2 % | 354 |
-| Flute Organ | 11.6 % | 338 |
-| String Ensemble | 7.0 % | 203 |
-| Tonewheel Organ | 6.0 % | 174 |
-| Harp | 8.3 % | 241 |
+| Glass E.Piano | 12.1 % | 350 |
+| Flute Organ | 12.6 % | 365 |
+| String Ensemble | 6.3 % | 182 |
+| Tonewheel Organ | 6.4 % | 186 |
+| Harp | 8.5 % | 248 |
 | Nylon Guitar | 6.9 % | 200 |
-| Clavichord | 4.6 % | 135 |
-| Pizzicato | 3.4 % | 98 |
-| String Section | 21.5 % | 624 |
-| Harmonium | 11.7 % | 339 |
-| Ocarina | 8.9 % | 258 |
-| Recorder | 8.6 % | 251 |
-| Flute | 8.5 % | 245 |
-| Pan Flute | 8.2 % | 238 |
-| Clarinet | 7.7 % | 222 |
-| Solo Violin | 12.2 % | 355 |
-| Solo Cello | 12.0 % | 347 |
-| Singing Bowl | 22.3 % | 646 |
-| Glass Harmonica | 20.0 % | 582 |
-| Bowed Vibes | 17.6 % | 511 |
-| Effects alone | 2.7 % | 79 |
+| Clavichord | 4.7 % | 135 |
+| Pizzicato | 4.1 % | 119 |
+| String Section | 22.6 % | 657 |
+| Harmonium | 14.1 % | 410 |
+| Ocarina | 13.0 % | 376 |
+| Recorder | 14.5 % | 420 |
+| Flute | 13.9 % | 405 |
+| Pan Flute | 12.8 % | 371 |
+| Clarinet | 11.0 % | 318 |
+| Solo Violin | 11.7 % | 338 |
+| Solo Cello | 12.8 % | 371 |
+| Singing Bowl | 21.7 % | 628 |
+| Glass Harmonica | 20.1 % | 582 |
+| Bowed Vibes | 18.7 % | 543 |
+| Choir | 11.9 % | 344 |
+| Effects alone | 3.0 % | 87 |
 
 Remeasured with seventeen instruments (2026-10-04); the four of build step 5
 and the four plucked strings of step 6 measured the same day, sixteen keys held. The Flute Organ first measured
@@ -1446,6 +1539,24 @@ changes took the pianos from 18.7 % to 14 %:
 
 Worst single blocks run to about 1 ms, but they appear on the Mac too and come
 from the benchmark sharing the CPU, not from the engine.
+
+Remeasured on 2026-10-05, after the click fixes and the Choir. The winds' glide
+reads the bore twice while it moves, and with the vibrato on it always moves, so
+they rose from about 8 % to about 13 %. String Section had reached 26 % and the
+first Choir 35 %. Both are now inside the target:
+- **String Section, 26 % to 22.6 %; the solo strings about 1 point lower.** The
+  bow's loop kept each note's swell, pressure and noise state in memory, and
+  every write to a string's delay line made the compiler read them all back,
+  since the write might have changed them. They now live in local variables
+  through the block, and are stored once at its end. The sound is bit for bit
+  the same. (Putting the three players in one vector was tried first. It was
+  slower: moving each player's values in and out of the vector cost more than
+  it saved.)
+- **Choir, 35 % to 12 %:** see *Synthetic*.
+
+"Onset" is the worst block in which a chord of four starts while twelve notes
+ring: the whole block must still fit. It is worst on the Una Corda Grand, at
+2.1 ms of the 2.9 ms.
 
 ## Implementation notes
 
@@ -1582,8 +1693,13 @@ from the benchmark sharing the CPU, not from the engine.
    Singing Bowl.~~ **Done**, 2026-10-04; see *Banded waveguide*. 1,147 checks
    pass; installed on the Move, awaiting the user's listening. **Release 0.5**
    waits on the user's go-ahead.
-8. **Choir.** Then the 114 factory presets, `help.json`, and the catalog entry.
-   **Release 1.0: all thirty-eight.**
+8. ~~**Choir.**~~ **Done**, 2026-10-05: see *Synthetic*. Before it, on the
+   user's listening: ~~noise recoloured~~ (*Noise that belongs to the note*),
+   ~~crackling at note starts fixed~~ (*No pops*), and ~~every default tuned
+   against recordings~~ (*Close to the real thing*). String Section and the
+   Choir were then made cheaper (*Will it fit*). 1,177 checks pass. Next: the
+   114 factory presets, `help.json`, and the catalog entry. **Release 1.0: all
+   thirty-eight.**
 9. Device revision: cut the pages after the first look.
 
 Unbuilt, in rough order of what they would add:

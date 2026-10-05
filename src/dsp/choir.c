@@ -213,35 +213,58 @@ void choir_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
     }
     tract(c, q, inst, 0);
 
+    /* The singers side by side, one to a lane. Each pulse needs the
+     * fundamental's phasor and the Nth harmonic's; both turn by a fixed step
+     * through the block, set afresh from the phase at its start so the two
+     * never drift apart. */
     const float a = c->a, aN1 = c->aN1, aN2 = c->aN2, a2 = 1.0f + a * a, norm = c->norm;
-    const float fN = (float)c->N, fN1 = fN + 1.0f;
+    const float fN = (float)c->N;
+    v4 zr = { 1, 1, 1, 1 }, zi = { 0 }, nr = { 1, 1, 1, 1 }, ni = { 0 };
+    v4 rc = { 1, 1, 1, 1 }, rs = { 0 }, rcN = { 1, 1, 1, 1 }, rsN = { 0 };
+    for (int k = 0; k < c->n; k++) {
+        const float ph = c->ph[k], th = TWO_PI * inc[k];
+        zi[k] = fast_sin(ph), zr[k] = fast_sin(ph + 0.25f);
+        ni[k] = fast_sin(fN * ph), nr[k] = fast_sin(fN * ph + 0.25f);
+        rc[k] = cosf(th), rs[k] = sinf(th);
+        rcN[k] = cosf(fN * th), rsN[k] = sinf(fN * th);
+        c->ph[k] += inc[k] * (float)frames;
+        c->ph[k] -= (float)(int)c->ph[k];
+    }
     const float mix = c->mix, out_g = c->level * c->crowd_norm;
     /* Breath noise: AIR, and more of it the softer the voice. */
     const float asp = (air * 0.9f + 0.15f * fmaxf(0.0f, c->soft_eff)) * 1.2f;
     const int n_s = c->n;
+    /* What changes sample by sample, kept out of memory: the output's
+     * writes could otherwise be any of it. */
+    const int held = v->held, use_press = v->got_press && press_src != 1;
+    const float press = v->press, fade_step = v->fade_step, pan_l = c->pan_l, pan_r = c->pan_r;
+    const float env_to = held ? c->lvl : 0.0f, env_k = held ? c->att_k : c->rel_k;
+    float env = c->env, press_s = c->press_s, nz_lp = c->nz_lp, fade = v->fade;
+    uint32_t rng = c->rng;
+    float z[2][CHOIR_FORMANTS][2], cfs[2][CHOIR_FORMANTS][3];
+    memcpy(z, c->z, sizeof(z));
+    memcpy(cfs, c->cf, sizeof(cfs));
     float peak = 0.0f;
     for (int n = 0; n < frames; n++) {
-        c->env += ((v->held ? c->lvl : 0.0f) - c->env) * (v->held ? c->att_k : c->rel_k);
-        float p = c->env;
-        if (v->got_press && press_src != 1) {
-            c->press_s += ((v->held ? v->press : 0.0f) - c->press_s) * pk;
-            p = press_src == 0 ? fmaxf(c->press_s, 0.25f * c->env) : 0.5f * (c->env + c->press_s);
+        env += (env_to - env) * env_k;
+        float p = env;
+        if (use_press) {
+            press_s += ((held ? press : 0.0f) - press_s) * pk;
+            p = press_src == 0 ? fmaxf(press_s, 0.25f * env) : 0.5f * (env + press_s);
         }
-        float s[3] = { 0.0f, 0.0f, 0.0f };
-        const float nz = noise(&c->rng);
-        c->nz_lp += (nz - c->nz_lp) * 0.5f;
-        for (int k = 0; k < n_s; k++) {
-            const float ph = c->ph[k];
-            const float s1 = fast_sin(ph), c1 = fast_sin(ph + 0.25f);
-            const float sN = fast_sin(fN * ph), sN1 = fast_sin(fN1 * ph);
-            /* sum_{h=1..N} a^h sin(h th), Moorer's closed form */
-            float g = (a * s1 - aN1 * sN1 + aN2 * sN) / (a2 - 2.0f * a * c1);
-            /* the breath, while the folds are open */
-            g = g * norm + asp * c->nz_lp * (0.6f + 0.4f * c1);
-            s[k] = g;
-            c->ph[k] = ph + inc[k];
-            if (c->ph[k] >= 1.0f) c->ph[k] -= 1.0f;
-        }
+        const float nz = noise(&rng);
+        nz_lp += (nz - nz_lp) * 0.5f;
+        /* sum_{h=1..N} a^h sin(h th), Moorer's closed form */
+        const v4 sN1 = ni * zr + nr * zi;
+        v4 s = (a * zi - aN1 * sN1 + aN2 * ni) / (a2 - 2.0f * a * zr);
+        /* the breath, while the folds are open */
+        s = s * norm + (asp * nz_lp) * (0.6f + 0.4f * zr);
+        v4 t = zr * rc - zi * rs;
+        zi = zr * rs + zi * rc;
+        zr = t;
+        t = nr * rcN - ni * rsN;
+        ni = nr * rsN + ni * rcN;
+        nr = t;
         float in[2];
         if (n_s == 1) in[0] = in[1] = s[0];
         else if (n_s == 2) in[0] = s[0] + mix * s[1], in[1] = s[1] + mix * s[0];
@@ -250,20 +273,23 @@ void choir_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         for (int e = 0; e < 2; e++) {
             float x = in[e];
             for (int k = 0; k < 5; k++) {
-                const float *cf = c->cf[e][k];
-                float r = cf[0] * x + cf[1] * c->z[e][k][0] + cf[2] * c->z[e][k][1];
-                c->z[e][k][1] = c->z[e][k][0];
-                c->z[e][k][0] = r;
+                const float *cf = cfs[e][k];
+                float r = cf[0] * x + cf[1] * z[e][k][0] + cf[2] * z[e][k][1];
+                z[e][k][1] = z[e][k][0];
+                z[e][k][0] = r;
                 x = r;
             }
-            y[e] = x * p * out_g * v->fade;
+            y[e] = x * p * out_g * fade;
         }
-        if (v->fade_step > 0.0f) v->fade = fmaxf(0.0f, v->fade - v->fade_step);
+        if (fade_step > 0.0f) fade = fmaxf(0.0f, fade - fade_step);
         const float m = fmaxf(fabsf(y[0]), fabsf(y[1]));
         if (m > peak) peak = m;
-        left[n] += y[0] * c->pan_l;
-        right[n] += y[1] * c->pan_r;
+        left[n] += y[0] * pan_l;
+        right[n] += y[1] * pan_r;
     }
+    c->env = env, c->press_s = press_s, c->nz_lp = nz_lp, v->fade = fade;
+    c->rng = rng;
+    memcpy(c->z, z, sizeof(z));
     c->t = t1;
     v->peak = peak;
     if ((!v->held && c->env < 1e-4f && peak < 1e-5f) || (v->fade_step > 0.0f && v->fade <= 0.0f))

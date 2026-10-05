@@ -1552,6 +1552,66 @@ static void bands(void) {
     CHECK(a1 > 3 && a1 > a0 + 2, "Singing Bowl BEAT: the bowl wah-wahs (wobble %.1f -> %.1f dB)", a0, a1);
 }
 
+/* ---- the choir ---- */
+
+static void choir(void) {
+    const char *t = "Choir";
+    const int inst = quilt_instrument_by_name(t);
+    /* One singer, without detune or vibrato, for what is measured on a line. */
+    const char *one = "volume=0;v_crowd=1;v_split=0;sway=0";
+    double a0, a1, d, worst = 0;
+    for (int key = 48; key <= 84; key += 12) {
+        cur_f0 = choir_freq(inst, key);
+        void *p = note(t, key, 90, 22050 + 16384, -1, one);
+        double c = m_pitch();
+        if (fabs(c) > fabs(worst)) worst = c;
+        A->destroy_instance(p);
+    }
+    CHECK(fabs(worst) < 3, "Choir: in tune from C3 to C6 (worst %+.1f cents)", worst);
+
+    cur_f0 = choir_freq(inst, 60);
+    /* The second harmonic sits on the first formant whatever the slope, so
+     * SOFT is heard from the fifth up, as on the bow. */
+    d = turn(t, 60, 90, 22050 + 8192, -1, one, "soft", m_upper, &a0, &a1);
+    CHECK(d < -12, "Choir SOFT: the overtones from the fifth harmonic up at least 12 dB down (%.1f -> %.1f dB)", a0, a1);
+    d = turn(t, 60, 90, 44100, -1, one, "soft", m_held, &a0, &a1);
+    CHECK(fabs(d) < 10, "Choir SOFT: changes the tone more than the level (%+.1f dB)", d);
+    d = turn(t, 60, 90, 22050 + 8192, -1, one, "c_choir", m_bright, &a0, &a1);
+    CHECK(a1 > a0 * 1.5, "Choir VOWEL: oo to ah, the voice at least half as bright again (%.0f -> %.0f Hz)", a0, a1);
+    cur_ratio = 4;
+    {
+        double h[2];
+        for (int e = 0; e < 2; e++) {
+            char x[120];
+            snprintf(x, sizeof(x), "%s;tone=%d", one, e);
+            void *p = note(t, 60, 90, 22050 + 8192, -1, x);
+            h[e] = part_db(22050, 8192, cur_f0 * 4) - part_db(22050, 8192, cur_f0);
+            A->destroy_instance(p);
+        }
+        CHECK((h[1] - h[0]) / 2 > 4, "Choir TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB)", h[0], h[1]);
+    }
+    d = turn(t, 60, 90, 44100, 22050, "volume=0", "decay", m_release, &a0, &a1);
+    CHECK(d > 20, "Choir DECAY: a released note sounds at least 20 dB longer (%.1f -> %.1f dB)", a0, a1);
+    a0 = stereo(t, "volume=0;v_crowd=1");
+    a1 = stereo(t, "volume=0;v_crowd=3");
+    CHECK(a1 < a0 - 0.2, "Choir CROWD: three singers, the channels at least 0.2 less alike (%.2f -> %.2f)", a0, a1);
+    d = turn(t, 60, 90, 44100 * 3, -1, "volume=0;sway=0;decay=1", "v_split", m_wobble, &a0, &a1);
+    CHECK(a1 > 3, "Choir SPLIT: the singers beat, a wobble of more than 3 dB (%.1f -> %.1f dB)", a0, a1);
+    d = turn(t, 60, 90, 22050, -1, "volume=0", "v_swell", m_early, &a0, &a1);
+    CHECK(d < -12, "Choir SWELL: the voices swell in, at least 12 dB quieter at 30 ms (%.1f -> %.1f dB)", a0, a1);
+    d = hiss(t, "volume=0", "v_air");
+    CHECK(d > -20, "Choir AIR: the breath is heard, %.1f dB against the note", d);
+    a0 = bowed_at(t, 15, "volume=0;v_press=0");
+    a1 = bowed_at(t, 127, "volume=0;v_press=0");
+    CHECK(a1 - a0 > 10, "Choir PRESS Pad: the pad is the breath, at least 10 dB from light to full (%.1f -> %.1f dB)", a0, a1);
+    a0 = bowed_at(t, 15, "volume=0;v_press=1");
+    a1 = bowed_at(t, 127, "volume=0;v_press=1");
+    CHECK(fabs(a1 - a0) < 1, "Choir PRESS Auto: the pad changes nothing (%.1f -> %.1f dB)", a0, a1);
+    cur_f0 = choir_freq(inst, 72);
+    d = turn(t, 72, 100, 44100 * 2, -1, "volume=0;v_crowd=1;v_split=0", "sway", m_line_peak, &a0, &a1);
+    CHECK(d < -6, "Choir SWAY: the vibrato spreads the fourth harmonic at least 6 dB (%.1f -> %.1f dB)", a0, a1);
+}
+
 /* The reverb alone: the same note with and without the plate, subtracted.
  * Everything else is deterministic, so what is left is the plate. */
 static float wet[44100 * 4];
@@ -1738,6 +1798,7 @@ int main(int argc, char **argv) {
     registers();
     bands();
     bands_hold();
+    choir();
     effects();
     clicks();
     cost();
