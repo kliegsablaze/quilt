@@ -8,15 +8,15 @@ request. The first request was "a wider palette, more soft sounds". The second w
 sounds". It has grown from four keyboards to **thirty-eight instruments in five
 families**, built on six engines. **The modal engine is built** (build steps 3
 and 4), and so are the banks and the FM voice (step 5), the waveguide
-engine, plucked and bowed (step 6), and the air engine (step 7):
-thirty-four instruments play, with the shared effects, measured on the Move.
+engine, plucked and bowed (step 6), and the air and banded engines (step 7):
+thirty-seven instruments play, with the shared effects, measured on the Move.
 They are Felt Upright, Una Corda Grand, Electric Grand, Clavichord, Tine Piano,
 Reed Piano, Celesta, Toy Piano, Tonewheel Organ, Flute Organ, Harmonium, Glass
 E.Piano, String Ensemble, Vibraphone, Marimba, Xylophone, Glockenspiel, Tubular
 Bells, Handbells, Handpan, Tongue Drum, Kalimba / Music Box, Harp, Nylon
 Guitar, Hammered Dulcimer, Pizzicato, Solo Cello, Solo Violin, String Section,
-Flute, Pan Flute, Ocarina, Recorder and Clarinet. The other four instruments have their
-pages and labels in place, but **`TYPE` does not offer them until their engine is
+Bowed Vibes, Glass Harmonica, Singing Bowl, Flute, Pan Flute, Ocarina, Recorder
+and Clarinet. The last instrument, the Choir, has its page and labels in place, but **`TYPE` does not offer them until their engine is
 built**, so nothing on the Move is a stand-in. Each instrument arrives with its own
 default sound on every page (see *Every instrument starts beautiful*).
 
@@ -537,12 +537,53 @@ the ends of each block and stepped between.
 
 ### 3. Banded waveguide: bowed and rubbed glass and metal
 
+Built 2026-10-04 (`banded.c`): Bowed Vibes, Glass Harmonica and Singing Bowl.
+**The bow is pad pressure**, with `PRESS` (Pad, Auto or Blend) as on the strings.
+
 - **What it is.** Essl & Cook's banded waveguides keep a travelling-wave loop for
   each strong mode, so a friction exciter (bow or wet finger) can drive an
   inharmonic object such as a bar, glass or bowl. Modal synthesis can't do that,
   because modes have no loop to sustain.
-- **Exciter.** The same friction junction as the bowed strings.
-- **Singing bowl.** Two near-degenerate modes per band give its slow beating.
+- **A band** is one period of its mode (whole samples and a first-order Thiran
+  allpass, fixed for the note) and a band-pass at the mode, a tenth of it wide
+  (a fifth with `BLUR`). Narrower bands sing purer but take far too long to
+  speak; this width answers in a few milliseconds and keeps the loop off its
+  own overtones. Every key is within 2 cents from C4 to C6 with no table.
+- **The friction** is the bow's table, `(|Δv|·reach/v_bow + 0.75)⁻⁴`: the
+  reach is set against the bow's speed, so the contact always sits on the
+  falling side of the curve, where it sustains, and the bow's speed sets the
+  level. `GRIP` (Bowed Vibes) presses harder and drives harder; a wet finger
+  (`WET`, Glass Harmonica) grips more smoothly, is rounder and hisses less.
+- **Speaking.** Each band starts with a little of its mode already in it, so
+  the friction takes hold at once instead of growing from nothing; the object
+  speaks in about 0.15 s whatever `SWELL` asks.
+- **The release.** A band-pass holds energy too, so the loop loses only part
+  of what its gain takes each period; the gain asks for that much more, and a
+  lifted note rings for `DECAY` (an eleventh to eleven times the middle).
+- **Softness.** `SOFT` and a gentle touch round what the contact gives, two
+  one-poles from 24 f₀ down to half of f₀, with the fundamental's loss given
+  back, as the bow's corners are. Rubbed, the bar and bowl lock their upper
+  modes out almost completely (the bowl's second pair sits 60 dB down), so
+  what `SOFT` darkens is the stick and slip's own harmonics; on the bowl a soft
+  stick is a leather-wrapped one as well, slipping more smoothly.
+- **Singing bowl.** Each mode is a pair, 1 to 15 cents apart (`BEAT`). The
+  stick travels round the rim, feeding one member of each pair and then the
+  other at the pairs' beat, and each pattern faces the listener in turn, so
+  the bowl wah-wahs even while the stick pulls the pair onto one note. Three
+  pairs (1, 2.79, 5.13); the fourth (8.48) was left out, as rubbed it is
+  inaudible.
+- **`HIT`** is a short pulse into every band, the mallet before the rub.
+
+**What it took.** Narrow bands (as in the papers) would take seconds to grow; a
+bow's grip divided among the modes never took hold. The hold test plays 486
+settings of key, `SOFT`, `CHAR` and touch and asks each to repeat its own period
+by 1 s and to sound: it found the lightest grip at its softest barely sounding,
+so `GRIP` now starts a quarter of the way in and drives the bow harder as well.
+
+**Cost on the Move:** Bowed Vibes 17.6 %, Glass Harmonica 20.0 %, Singing Bowl
+22.3 %. The bowl first measured 30.7 %; a band's gain now glides once a block,
+the pair's feed takes no branch, the fourth pair went, and the read became an
+allpass (one multiply in place of four).
 
 ### 4. Air: flutes, clarinet and harmonium
 
@@ -925,7 +966,7 @@ and fails if any knob appears twice, if `CLOSE` returns, or if `SPEED` is shown 
 the Vibraphone.
 
 **Picking an instrument.** `TYPE` steps through the instruments built so far, in
-family order: today the thirty-four named at the top of this document. The jog
+family order: today the thirty-seven named at the top of this document. The jog
 wheel browses **presets** on the Main page; for now there is one per instrument, its
 default sound. At 1.0 the presets become the catalogue: 38 instruments × 3 = 114,
 named *Family · Instrument · Variation*, for example *Mallets · Vibraphone · Motor
@@ -986,13 +1027,16 @@ key. Any Effects key not named takes its shared default.
 | Recorder | Steady and sweet, a little chiff | SOFT 60, PUFF 40, DECAY 30, SWAY 10, SPACE 30 | ONSET 35, EDGE 45, PRESS Pad, SWELL 15, AIR 30 | SIZE 50 (2.2 s), DARK 50, DELAY 15, SPEED 50 |
 | Clarinet | The chalumeau: a soft reed, low breath | SOFT 60, REED 30, DECAY 35, SWAY 20, SPACE 30 | ONSET 30, EDGE 40, PRESS Pad, SWELL 20, AIR 30 | SIZE 55 (2.5 s), DARK 50, DELAY 18, SPEED 55 |
 | Harmonium | A harmonium in a small room, the céleste half in (Nico) | SOFT 60, BEAT 40, DECAY 30, SPACE 20 | ONSET 20, EDGE 40, PRESS Pad, SWELL 30, AIR 30 | SIZE 40 (1.9 s), DARK 50, DELAY 10, SPEED 40 (the tremulant) |
+| Bowed Vibes | A bass bow on the bars, slow and pure | SOFT 60, GRIP 50, DECAY 60, SPACE 35 | BOW 40, BLUR 15, HIT 0, PRESS Pad, SWELL 35, NOISE 20 | SIZE 65 (3.1 s), DARK 40, DELAY 25 |
+| Glass Harmonica | Franklin's glass, a wet finger | SOFT 70, WET 50, DECAY 50, SPACE 35 | BOW 40, BLUR 10, HIT 0, PRESS Pad, SWELL 30, NOISE 15 | SIZE 65 (3.1 s), DARK 40, DELAY 25 |
+| Singing Bowl | A bowl struck lightly, then rubbed, its pairs beating slowly | SOFT 60, BEAT 40, DECAY 65, SPACE 35 | BOW 35, BLUR 10, HIT 40, PRESS Pad, SWELL 40, NOISE 15 | SIZE 70 (3.2 s), DARK 40, DELAY 30 |
 
 Values are percentages; the times are the plate's measured ring (RT60).
 
 **They are equally loud.** Switching instruments must not jump in level. Each
 instrument's own gain is set so the same phrase (a gentle chord, a line over it, a
 fuller chord, velocities 55–76) measures within half a decibel of
-**−26.5 LUFS** on all thirty-four (measured −26.4 to −26.6), with the voicing's
+**−26.5 LUFS** on all thirty-seven (measured −26.4 to −26.6), with the voicing's
 room included. Before this the first four were 12 dB apart, the Felt Upright
 quietest. Two engine changes made the
 match possible without pushing loud chords into the limiter:
@@ -1080,6 +1124,12 @@ the sound by at least a set amount**, measured on a middle C:
 | PRESS (winds), SWAY (winds) | As for the bow; the vibrato spreads the 3rd harmonic 6 dB (the harmonium's tremulant: 6 dB of wobble) |
 | COVER, PURE, REED, PUFF, BEAT | The upper overtones 8 dB down; the overtones 12 dB down; a harder reed 6 dB darker; the chiff at −14 dB; the céleste beats 3 dB |
 | Registers | None of 972 settings in the octave, the twelfth, or silent |
+| **Banded:** tuning | Every C from C4 to C6 within 3 cents |
+| SOFT (banded) | The upper mode (the bar's 4 f₀, the glass's 2.32 f₀, the bowl's stick-slip 2 f₀) at least 12 dB down; the level within 10 dB |
+| BOW, BLUR, HIT | At least 6 dB louder; the band's own 2 f₀ at least 6 dB up; the mallet at no less than −14 dB |
+| SWELL, NOISE (banded) | At least 12 dB quieter at 150 ms (a bowed object takes that long to speak); the friction at no less than −20 dB |
+| GRIP, WET, BEAT | At least 6 dB more; the overtones at least 6 dB down; a wah of at least 3 dB |
+| Hold (banded) | All 486 settings repeat their period and sound by 1 s |
 | Touch, held (bow and winds) | A gentle touch at least 2 dB darker in its harmonics, and SOFT at least 4 dB, measured 0.4 s in (a nearly pure tone's centroid hardly leaves f₀) |
 | SIZE | The room rings at least 20 dB longer at 2 s |
 | DARK | The room's tail at least 6 dB darker, heard on the Electric Grand, hard, pickups full up (once on a hard Felt Upright, whose brightness there was partly the contact ringing up; see *Stable at any setting*) |
@@ -1374,6 +1424,9 @@ with the pedal down and the plate on.
 | Clarinet | 7.7 % | 222 |
 | Solo Violin | 12.2 % | 355 |
 | Solo Cello | 12.0 % | 347 |
+| Singing Bowl | 22.3 % | 646 |
+| Glass Harmonica | 20.0 % | 582 |
+| Bowed Vibes | 17.6 % | 511 |
 | Effects alone | 2.7 % | 79 |
 
 Remeasured with seventeen instruments (2026-10-04); the four of build step 5
@@ -1525,8 +1578,10 @@ from the benchmark sharing the CPU, not from the engine.
    octave jumps it took. **Release 0.4** waits on the user's go-ahead.
 7. ~~**Air engine:** Flute, Pan Flute, Ocarina, Recorder, Clarinet,
    Harmonium.~~ **Done**, 2026-10-04, on request after the bowed strings; see
-   *Air*. Then the **banded waveguide engine:** Bowed Vibes, Glass Harmonica,
-   Singing Bowl. **Release 0.5.**
+   *Air*. ~~Then the **banded waveguide engine:** Bowed Vibes, Glass Harmonica,
+   Singing Bowl.~~ **Done**, 2026-10-04; see *Banded waveguide*. 1,147 checks
+   pass; installed on the Move, awaiting the user's listening. **Release 0.5**
+   waits on the user's go-ahead.
 8. **Choir.** Then the 114 factory presets, `help.json`, and the catalog entry.
    **Release 1.0: all thirty-eight.**
 9. Device revision: cut the pages after the first look.

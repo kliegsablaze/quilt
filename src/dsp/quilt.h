@@ -19,7 +19,7 @@
 #define MODAL_MAXOSC 160        /* 72 string modes, two strings each, plus spare */
 #define MODAL_BUDGET 1536       /* oscillators across all voices; see Will it fit */
 #define QUILT_NINST 38
-#define QUILT_NTYPES 34        /* the instruments TYPE offers: those built so far */
+#define QUILT_NTYPES 37        /* the instruments TYPE offers: those built so far */
 #define QUILT_MAX_SHAPE_KEYS 16
 
 typedef enum { FAM_KEYS, FAM_MALLETS, FAM_STRINGS, FAM_GLASS, FAM_BREATH } family_t;
@@ -220,6 +220,25 @@ typedef struct {
     uint32_t rng;
 } air_voice_t;
 
+/* One bowed or rubbed object: a band per strong mode. DESIGN.md, Banded. */
+#define BANDED_MODES 8
+#define BANDED_LINE 512         /* a mode's period, down to A2 */
+typedef struct {
+    float line[BANDED_LINE];
+    int w, li;
+    float ap_c, ap_x1, ap_y1;   /* the read's fractional allpass, fixed for the note */
+    float b0, a1, a2, x1, x2, y1, y2;   /* the band-pass */
+    float amp, g, g_play, g_rel, back;
+} band_t;
+
+typedef struct {
+    band_t band[BANDED_MODES];
+    int n;
+    float f0, env, att_k, rel_k, lvl, press_s, lift, hit;
+    float r1, r2, nz_lp, level, pan_l, pan_r, beat_hz, wah_ph, touch;
+    uint32_t rng;
+} banded_voice_t;
+
 typedef struct {
     int active, held, note, inst;
     float fade, fade_step; /* ghosts only */
@@ -231,6 +250,7 @@ typedef struct {
     wg_voice_t wg;
     bow_voice_t bow;
     air_voice_t air;
+    banded_voice_t band;
 } voice_t;
 
 /* The always-running banks: tonewheels, pipes and the string machine.
@@ -359,6 +379,12 @@ int air_sway_is_vibrato(int inst);
 float air_freq(int inst, int note);
 void air_note_on(quilt_t *q, voice_t *v);
 void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
+
+/* banded.c */
+int banded_supports(int inst);
+float banded_freq(int inst, int note);
+void banded_note_on(quilt_t *q, voice_t *v);
+void banded_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
 
 /* banks.c */
 int banks_supports(int inst);

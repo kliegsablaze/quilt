@@ -182,7 +182,7 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
 
     { "Bowed Vibes", "bowed_vibes", G, ENG_BANDED, SH_BANDED, "Grip", "Bow Grip", .6f, .6f, 0, .35f },
     { "Glass Harmonica", "glass_harmonica", G, ENG_BANDED, SH_BANDED, "Wet", "Wet Finger", .7f, .5f, 0, .35f },
-    { "Singing Bowl", "singing_bowl", G, ENG_BANDED, SH_BANDED, "Beat", "Mode Beating", .6f, .8f, 0, .35f },
+    { "Singing Bowl", "singing_bowl", G, ENG_BANDED, SH_BANDED, "Beat", "Mode Beating", .6f, .65f, 0, .35f },
 
     { "Flute", "flute", B, ENG_AIR, SH_AIR, "Cover", "Lip Cover", .6f, .3f, .25f, .3f },
     { "Pan Flute", "pan_flute", B, ENG_AIR, SH_AIR, "Puff", "Chiff", .6f, .3f, .15f, .35f },
@@ -201,6 +201,7 @@ const char *const QUILT_TYPE_NAMES[QUILT_NTYPES] = {
     "Vibraphone", "Marimba", "Xylophone", "Glockenspiel", "Tubular Bells", "Handbells",
     "Handpan", "Tongue Drum", "Kalimba / Music Box", "Harp", "Nylon Guitar", "Hammered Dulcimer",
     "Pizzicato", "Solo Cello", "Solo Violin", "String Section",
+    "Bowed Vibes", "Glass Harmonica", "Singing Bowl",
     "Flute", "Pan Flute", "Ocarina", "Recorder", "Clarinet",
 };
 
@@ -329,6 +330,15 @@ static const struct { const char *name, *values; } VOICINGS[] = {
     /* A harmonium in a small room, the céleste half in (Nico). */
     { "Harmonium", "char=0.4 a_onset=0.2 a_edge=0.4 a_press=0 a_swell=0.3 a_air=0.3 "
                    "size=0.4 dark=0.5 delay=0.1 speed=0.4" },
+    /* A vibraphone bar bowed on its end, the motor off, ringing on. */
+    { "Bowed Vibes", "char=0.5 d_bow=0.4 d_blur=0.15 d_hit=0 d_press=0 d_swell=0.35 d_noise=0.2 "
+                     "size=0.65 dark=0.4 delay=0.25" },
+    /* Franklin's glass, a wet finger, a slow swell. */
+    { "Glass Harmonica", "char=0.5 d_bow=0.4 d_blur=0.1 d_hit=0 d_press=0 d_swell=0.3 d_noise=0.15 "
+                         "size=0.65 dark=0.4 delay=0.25" },
+    /* A bowl struck lightly, then rubbed, its pairs beating slowly. */
+    { "Singing Bowl", "char=0.4 d_bow=0.35 d_blur=0.1 d_hit=0.4 d_press=0 d_swell=0.4 d_noise=0.15 "
+                      "size=0.7 dark=0.4 delay=0.3" },
     /* Rosewood and yarn, nearly dry. */
     { "Marimba", "char=0 m_split=0.05 m_body=0.75 m_damp=0 m_noise=0.32 "
                  "size=0.45 dark=0.5 delay=0.15 tone=0.52" },

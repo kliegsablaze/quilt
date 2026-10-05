@@ -1437,6 +1437,120 @@ static void winds(void) {
     CHECK(a1 > 3 && a1 > a0 + 2, "Harmonium BEAT: the céleste beats (wobble %.1f -> %.1f dB)", a0, a1);
 }
 
+/* ---- the bowed and rubbed glass and metal ---- */
+
+/* The bow on a bar, a glass or a bowl could squeal onto a higher mode, or
+ * fail to take hold: by 1 s, every key, SOFT, CHAR and touch repeats each
+ * period of its note and sounds. */
+static void bands_hold(void) {
+    static const char *const bd[3] = { "Bowed Vibes", "Glass Harmonica", "Singing Bowl" };
+    int bad = 0, n = 0;
+    char what[120] = "";
+    for (int i = 0; i < 3; i++) {
+        char ck[48];
+        snprintf(ck, sizeof(ck), "c_%s", QUILT_INST[quilt_instrument_by_name(bd[i])].slug);
+        for (int key = 48; key <= 96; key += 6)
+            for (int sf = 0; sf <= 2; sf++)
+                for (int c = 0; c <= 2; c++)
+                    for (int vel = 30; vel <= 127; vel += 97) {
+                        char x[120];
+                        snprintf(x, sizeof(x), "volume=0;d_hit=0;soft=%g;%s=%g", sf * 0.5, ck, c * 0.5);
+                        cur_f0 = banded_freq(quilt_instrument_by_name(bd[i]), key);
+                        void *p = note(bd[i], key, vel, 44100 + 4410 + 2048, -1, x);
+                        const int l = (int)(QUILT_SR / cur_f0 + 0.5);
+                        double c2 = 0, e0 = 0, e1 = 0;
+                        for (int k = 44100; k < 44100 + 4410; k++) { c2 += wave[k] * wave[k + l]; e0 += wave[k] * wave[k]; e1 += wave[k + l] * wave[k + l]; }
+                        const double r1 = c2 / sqrt(e0 * e1 + 1e-30), level = db(sqrt(e0 / 4410));
+                        n++;
+                        if ((r1 < 0.8 || level < -60) && !bad++)
+                            snprintf(what, sizeof(what), "%s key %d soft %.1f char %.1f vel %d (r %.2f, %.1f dB)", bd[i], key,
+                                     sf * 0.5, c * 0.5, vel, r1, level);
+                        A->destroy_instance(p);
+                    }
+    }
+    CHECK(!bad, "the bands hold their note on all %d settings, sounding and never squealing (%d bad; first %s)", n, bad, what);
+}
+
+static double m_speaks(void) { return db(rms_at(6615, 2205)); }
+
+static void bands(void) {
+    static const char *const bd[3] = { "Bowed Vibes", "Glass Harmonica", "Singing Bowl" };
+    /* The bowl, rubbed, locks every mode but the first: its upper partial
+     * is the stick and slip's own harmonic, at 2 f0. */
+    static const double mode2[3] = { 4.0198, 2.32, 2.0 };
+    double a0, a1, d;
+    for (int i = 0; i < 3; i++) {
+        const char *t = bd[i];
+        const int inst = quilt_instrument_by_name(t);
+        const char *base = "volume=0;d_hit=0;c_singing_bowl=0";
+        double worst = 0;
+        for (int key = 60; key <= 84; key += 12) {
+            cur_f0 = banded_freq(inst, key);
+            void *p = note(t, key, 90, 22050 + 16384, -1, base);
+            double c = m_pitch();
+            if (fabs(c) > fabs(worst)) worst = c;
+            A->destroy_instance(p);
+        }
+        CHECK(fabs(worst) < 3, "%s: in tune from C4 to C6 (worst %+.1f cents)", t, worst);
+
+        cur_f0 = banded_freq(inst, 60);
+        cur_ratio = mode2[i];
+        d = turn(t, 60, 90, 22050 + 8192, -1, base, "soft", m_late, &a0, &a1);
+        {
+            double h[2];
+            for (int e = 0; e < 2; e++) {
+                char x[120];
+                snprintf(x, sizeof(x), "%s;soft=%d", base, e);
+                void *p = note(t, 60, 90, 22050 + 8192, -1, x);
+                h[e] = part_db(22050, 8192, cur_f0 * mode2[i]) - part_db(22050, 8192, cur_f0);
+                A->destroy_instance(p);
+            }
+            if (i != 1)
+                CHECK(h[1] - h[0] < -12, "%s SOFT: the upper mode at least 12 dB down (%.1f -> %.1f dB)", t, h[0], h[1]);
+            for (int e = 0; e < 2; e++) {
+                char x[120];
+                snprintf(x, sizeof(x), "%s;tone=%d", base, e);
+                void *p = note(t, 60, 90, 22050 + 8192, -1, x);
+                h[e] = part_db(22050, 8192, cur_f0 * mode2[i]) - part_db(22050, 8192, cur_f0);
+                A->destroy_instance(p);
+            }
+            CHECK((h[1] - h[0]) / log2(mode2[i]) > 4, "%s TONE: tilts at least 4 dB per octave (%.1f -> %.1f dB)", t, h[0], h[1]);
+        }
+        d = turn(t, 60, 90, 44100, -1, base, "soft", m_held, &a0, &a1);
+        CHECK(fabs(d) < 10, "%s SOFT: changes the tone more than the level (%+.1f dB)", t, d);
+        d = turn(t, 60, 90, 44100, 22050, base, "decay", m_release, &a0, &a1);
+        CHECK(d > 20, "%s DECAY: a released note rings at least 20 dB longer (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 90, 44100, -1, base, "d_bow", m_held, &a0, &a1);
+        CHECK(d > 6, "%s BOW: a faster bow, at least 6 dB more (%.1f -> %.1f dB)", t, a0, a1);
+        cur_ratio = 2;
+        d = turn(t, 60, 90, 22050 + 8192, -1, base, "d_blur", m_partial, &a0, &a1);
+        CHECK(d > 6, "%s BLUR: wider bands, less pure, the band's own 2 f0 at least 6 dB up (%.1f -> %.1f dB)", t, a0, a1);
+        d = burst(t, "volume=0;c_singing_bowl=0", "d_hit");
+        CHECK(d > -14, "%s HIT: the mallet is heard, %.1f dB against the note", t, d);
+        /* A bowed object takes about 0.15 s to speak however fast the bow
+         * comes in, so SWELL is measured there. */
+        d = turn(t, 60, 90, 22050, -1, base, "d_swell", m_speaks, &a0, &a1);
+        CHECK(d < -12, "%s SWELL: the bow swells in, at least 12 dB quieter at 150 ms (%.1f -> %.1f dB)", t, a0, a1);
+        d = hiss(t, base, "d_noise");
+        CHECK(d > -20, "%s NOISE: the friction is heard, %.1f dB against the note", t, d);
+        a0 = bowed_at(t, 15, "volume=0;d_press=0;d_hit=0;c_singing_bowl=0");
+        a1 = bowed_at(t, 127, "volume=0;d_press=0;d_hit=0;c_singing_bowl=0");
+        CHECK(a1 - a0 > 10, "%s PRESS Pad: the pad is the bow, at least 10 dB from light to full (%.1f -> %.1f dB)", t, a0, a1);
+        a0 = bowed_at(t, 15, "volume=0;d_press=1;d_hit=0;c_singing_bowl=0");
+        a1 = bowed_at(t, 127, "volume=0;d_press=1;d_hit=0;c_singing_bowl=0");
+        CHECK(fabs(a1 - a0) < 1, "%s PRESS Auto: the pad changes nothing (%.1f -> %.1f dB)", t, a0, a1);
+        d = turn(t, 60, 100, 44100 * 3, -1, "volume=0;d_hit=0;c_singing_bowl=0;speed=0.4;decay=1", "sway", m_wobble, &a0, &a1);
+        CHECK(a1 > 6 && a0 < 1.5, "%s SWAY: the tremolo wobbles the note at least 6 dB (%.1f -> %.1f dB)", t, a0, a1);
+    }
+    d = turn("Bowed Vibes", 60, 90, 44100, -1, "volume=0", "c_bowed_vibes", m_held, &a0, &a1);
+    CHECK(d > 6, "Bowed Vibes GRIP: a firmer grip, the bar sings at least 6 dB more (%.1f -> %.1f dB)", a0, a1);
+    cur_f0 = banded_freq(quilt_instrument_by_name("Glass Harmonica"), 60);
+    d = turn("Glass Harmonica", 60, 90, 22050 + 8192, -1, "volume=0", "c_glass_harmonica", m_overtones, &a0, &a1);
+    CHECK(d < -6, "Glass Harmonica WET: a wet finger sings purer, the overtones at least 6 dB down (%.1f -> %.1f dB)", a0, a1);
+    d = turn("Singing Bowl", 60, 90, 44100 * 3, -1, "volume=0;decay=1;d_hit=0", "c_singing_bowl", m_wobble, &a0, &a1);
+    CHECK(a1 > 3 && a1 > a0 + 2, "Singing Bowl BEAT: the bowl wah-wahs (wobble %.1f -> %.1f dB)", a0, a1);
+}
+
 /* The reverb alone: the same note with and without the plate, subtracted.
  * Everything else is deterministic, so what is left is the plate. */
 static float wet[44100 * 4];
@@ -1621,6 +1735,8 @@ int main(int argc, char **argv) {
     octaves();
     winds();
     registers();
+    bands();
+    bands_hold();
     effects();
     clicks();
     cost();
