@@ -120,7 +120,7 @@ static void types(void *p) {
 
 static void presets(void *p) {
     CHECK(num(p, "preset_count") == QUILT_NPRESETS, "%d factory presets", QUILT_NPRESETS);
-    char idx[8];
+    char idx[16];
     const int marimba = quilt_type_index(quilt_instrument_by_name("Marimba"));
     snprintf(idx, sizeof(idx), "%d", marimba * QUILT_PER_TYPE);
     A->set_param(p, "preset", idx);
@@ -702,7 +702,7 @@ static double am_depth(int a, int n) {
 /* Renders the same note with `key` at 0 and at 1; the caller measures each. */
 static double turn(const char *type, int key, int vel, int frames, int release_at, const char *extra,
                    const char *knob, double (*m)(void), double *at0, double *at1) {
-    char e[160];
+    char e[512];
     for (int end = 0; end < 2; end++) {
         snprintf(e, sizeof(e), "%s%s%s=%d", extra ? extra : "", extra ? ";" : "", knob, end);
         void *p = note(type, key, vel, frames, release_at, e);
