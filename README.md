@@ -36,3 +36,17 @@ scripts/install.sh
 `install.sh` copies the build to `ableton@move.local` (or `$MOVE_HOST`).
 The tests plan the pages with the host's own planner, so they want a Schwung
 checkout at `../schwung` (or `$SCHWUNG`).
+
+## License
+
+Quilt is under the [PolyForm Strict License 1.0.0](LICENSE): you may use it
+for any noncommercial purpose, but not distribute it or make changes or new
+works based on it.
+
+**The music is yours.** Music, recordings and performances you make by playing
+Quilt belong to you, and you may use, release and sell them however you like,
+including commercially. The license covers the software, not the sounds you
+make with it.
+
+The Schwung plugin API header is MIT-licensed; see
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
