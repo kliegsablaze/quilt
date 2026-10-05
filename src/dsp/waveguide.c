@@ -72,7 +72,7 @@ static const wg_recipe_t RECIPES[] = {
       .symp = { 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59 } },
     /* Fingerstyle near the soundhole: the air mode at 100 Hz, the top's
      * first modes above it. The bank is the six open strings. */
-    { .name = "Nylon Guitar", .gain = 0.505f, .lowest = 40,
+    { .name = "Nylon Guitar", .gain = 0.56f, .lowest = 40,
       .t60_ref = 4.0f, .f_ref = 261.6f, .t60_slope = 0.6f, .fb_mult = 0.8f, .soft_mult = 1.0f,
       .body_hz = { 100, 205, 400, 580 }, .body_t60 = { 0.08f, 0.05f, 0.03f, 0.02f },
       .body_g = { 0.8f, 0.7f, 0.4f, 0.25f },
@@ -81,7 +81,7 @@ static const wg_recipe_t RECIPES[] = {
       .symp = { 40, 45, 50, 55, 59, 64 } },
     /* Gut strings plucked by the finger's pad and stopped by the other hand,
      * so short and dark; the viola's body, or the cello's (DEEP). */
-    { .name = "Pizzicato", .gain = 1.33f, .lowest = 36,
+    { .name = "Pizzicato", .gain = 1.07f, .lowest = 36,
       .t60_ref = 1.6f, .f_ref = 130.8f, .t60_slope = 0.5f, .fb_mult = 0.5f, .soft_mult = 0.7f,
       .body_hz = { 230, 400, 480, 1100 }, .body_t60 = { 0.10f, 0.08f, 0.08f, 0.05f },
       .body_g = { 0.8f, 0.6f, 0.6f, 0.3f },
@@ -278,11 +278,11 @@ void waveguide_note_on(quilt_t *q, voice_t *v) {
     if (s->ex_len > (int)(0.5f * QUILT_SR)) s->ex_len = (int)(0.5f * QUILT_SR);
 
     /* The finger on the string, the nail's click, the tangent's knock. */
-    s->nz_k = 1.0f - expf(-TWO_PI * r->noise_hz / QUILT_SR);
-    s->nz_k2 = 1.0f - expf(-TWO_PI * r->noise_hz * 0.25f / QUILT_SR);
+    tint_set(&s->nz_t, r->noise_hz * 0.5f, 0.7f);
     s->nz_td = expf(-1.0f / (r->noise_ms * 0.001f * QUILT_SR));
     s->nz_env = 1.0f;
-    s->nz_a = r->noise_gain * 2.5f * r->gain * (0.2f + 0.8f * vel) * slot(q, inst, "p_noise", 0.3f);
+    s->nz_a = r->noise_gain * 2.5f * r->gain * (0.2f + 0.8f * vel) *
+               noise_amount(slot(q, inst, "p_noise", 0.37f), 2.2f);
 
     s->level = r->gain;
     float pan = 0.5f + 0.5f * r->pan_spread * (float)(v->note - 64) / 40.0f;
@@ -295,7 +295,19 @@ void waveguide_render(quilt_t *q, voice_t *v, float *left, float *right, float *
     const wg_recipe_t *r = recipe_for(v->inst);
     wg_voice_t *s = &v->wg;
     const int damped = s->dampable && !v->held && !q->pedal;
-    const float g = damped ? s->gd : s->g;
+    /* The hand (or the damper) settles on the string over about 40 ms, the
+     * loss moving evenly in rate, not in one step, which would drop the
+     * string's level a round trip later, a click. */
+    if (s->damp_x != (float)damped) {
+        const float step = (float)frames / (0.04f * QUILT_SR);
+        s->damp_x = damped ? fminf(1.0f, s->damp_x + step) : fmaxf(0.0f, s->damp_x - step);
+    }
+    const float g_to = s->damp_x <= 0.0f ? s->g : s->damp_x >= 1.0f ? s->gd
+                     : expf((1.0f - s->damp_x) * logf(s->g) + s->damp_x * logf(s->gd));
+    /* ... and within the block, sample by sample, from where the last ended. */
+    if (s->g_was <= 0.0f) s->g_was = g_to;
+    const float g_mul = g_to == s->g_was ? 1.0f : powf(g_to / s->g_was, 1.0f / (float)frames);
+    float g = s->g_was;
     const float a = s->a, ac = s->ac;
 
     /* BEND: pad pressure on the key presses the tangent harder and the
@@ -341,6 +353,7 @@ void waveguide_render(quilt_t *q, voice_t *v, float *left, float *right, float *
         }
         float y = lagrange(s->line, LINE_MASK, s->w, s->D);
         s->lz += (1.0f - a) * (y + exc - s->lz);
+        g *= g_mul;
         float t = g * s->lz;
         if (ac != 0.0f) {
             float ap = ac * t + s->ax1 - ac * s->ay1;
@@ -353,10 +366,7 @@ void waveguide_render(quilt_t *q, voice_t *v, float *left, float *right, float *
 
         float knock = 0.0f;
         if (s->nz_env > 1e-4f) {
-            float nz = noise(&s->rng);
-            s->nz_lp += (nz - s->nz_lp) * s->nz_k;
-            s->nz_lp2 += (s->nz_lp - s->nz_lp2) * s->nz_k2;
-            knock = (s->nz_lp - s->nz_lp2) * s->nz_env * s->nz_a;
+            knock = tint(&s->nz_t, noise(&s->rng)) * s->nz_env * s->nz_a;
             s->nz_env *= s->nz_td;
         }
         float out = y * s->level * v->fade;
@@ -364,12 +374,13 @@ void waveguide_render(quilt_t *q, voice_t *v, float *left, float *right, float *
         if (v->fade_step > 0.0f) v->fade = fmaxf(0.0f, v->fade - v->fade_step);
         float m = fabsf(out);
         if (m > peak) peak = m;
-        left[n] += out * s->pan_l + knock * 0.5f;
-        right[n] += out * s->pan_r + knock * 0.5f;
+        left[n] += (out + knock * 0.71f) * s->pan_l;
+        right[n] += (out + knock * 0.71f) * s->pan_r;
         bridge[n] += out;
     }
     if (!bending) s->bend = bend_to;
-    v->mv.peak = peak;
+    s->g_was = g_to;
+    v->peak = peak;
     if ((peak < 1e-5f && s->ex_n >= s->ex_len && s->nz_env <= 1e-4f) ||
         (v->fade_step > 0.0f && v->fade <= 0.0f))
         v->active = 0;
@@ -487,7 +498,7 @@ static const bow_recipe_t BOW_RECIPES[] = {
       .body_g = { 0.8f, 0.7f, 0.7f, 0.5f }, .players = 1, .ch = BC_VEIL },
     /* The violin's: air at 280 Hz, the main wood modes near 500, the
      * bridge hill at 2.5 kHz. */
-    { .name = "Solo Violin", .gain = 1.1f, .lowest = 55,
+    { .name = "Solo Violin", .gain = 0.915f, .lowest = 55,
       .t60_ref = 2.0f, .f_ref = 392.0f, .t60_slope = 0.5f, .fb_mult = 1.0f,
       .body_hz = { 280, 460, 530, 2500 }, .body_t60 = { 0.08f, 0.05f, 0.05f, 0.005f },
       .body_g = { 0.8f, 0.7f, 0.7f, 0.6f }, .players = 1, .ch = BC_VEIL },
@@ -524,6 +535,8 @@ void bowed_note_on(quilt_t *q, voice_t *v) {
     const float charv = q->charv[inst];
     const float soft = q->g[G_SOFT];
     b->f0 = f0;
+    /* The hair's hiss, where the string's own overtones are. */
+    tint_set(&b->nz_t, fminf(fmaxf(3.0f * f0, 500.0f), 2000.0f), 0.7f);
     b->P = QUILT_SR / f0;
 
     /* VEIL: the bow from near the bridge (bright, it takes a firm bow) to
@@ -608,7 +621,7 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
     const int inst = v->inst;
     const float dt = 1.0f / QUILT_SR;
     const int press_src = (int)slot(q, inst, "b_press", 0.0f);   /* Pad, Auto, Blend */
-    const float noise_a = slot(q, inst, "b_noise", 0.3f);
+    const float noise_a = noise_amount(slot(q, inst, "b_noise", 0.2f), 7.4f);
     /* SWAY (or the mod wheel) is the vibrato, up to 40 cents, at SPEED; it
      * comes in after the note has spoken. */
     const float depth = fmaxf(q->gs[G_SWAY], q->modwheel) * 40.0f / 1200.0f * 0.6931f;
@@ -693,9 +706,7 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         b->dc_mix += ((v->held ? 0.0f : 1.0f) - b->dc_mix) * (v->held ? 1.0f : 0.0005f);
         float vb = 0.22f * p * (1.0f - 0.5f * bite);
         /* NOISE: the hair on the string, a hiss that follows the bow. */
-        float nz = noise(&b->rng);
-        b->nz_lp += (nz - b->nz_lp) * 0.3f;
-        const float hiss = (nz - b->nz_lp) * noise_a * p * contact * 0.15f;
+        const float hiss = tint(&b->nz_t, noise(&b->rng)) * noise_a * p * contact * 0.15f;
 
         float l = hiss * 0.7f, rr = hiss * 0.7f;
         for (int i = 0; i < b->n; i++) {
@@ -744,7 +755,7 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         right[n] += rr;
         b->t += dt;
     }
-    v->mv.peak = peak;
+    v->peak = peak;
     if ((!v->held && b->env < 1e-4f && peak < 1e-5f) || (v->fade_step > 0.0f && v->fade <= 0.0f))
         v->active = 0;
 }

@@ -212,6 +212,9 @@ void air_note_on(quilt_t *q, voice_t *v) {
     const float charv = q->charv[inst];
     const float edge = slot(q, inst, "a_edge", 0.4f);
     a->f0 = f0;
+    /* The breath and the chiff, coloured by the mouthpiece and the edge. */
+    tint_set(&a->nz_t, fminf(fmaxf(3.0f * f0, 600.0f), 2000.0f), 0.7f);
+    tint_set(&a->chiff_t, fminf(fmaxf(5.0f * f0, 1000.0f), 3500.0f), 1.0f);
 
     /* The breath: up to the key's velocity in SWELL's time, 20 ms to 1.2 s. */
     const float swell = slot(q, inst, "a_swell", 0.2f);
@@ -260,6 +263,11 @@ void air_note_on(quilt_t *q, voice_t *v) {
     a->charv = charv;
     a->soft_eff = -1.0f;
     shape(r, a, fminf(1.0f, fmaxf(-0.3f, q->g[G_SOFT] + 1.4f * (0.75f - a->lvl))));
+    a->Db_was = a->D;
+    a->Dj_was = a->Dj;
+    a->comp_was = a->comp;
+    a->y0_was = 0.0f;
+    a->jg_was = a->jet_th * a->over;
     a->vib_ph = 0.5f + 0.5f * noise(&a->rng);
     float pan = 0.5f + 0.25f * (float)(v->note - 66) / 30.0f;
     pan = fminf(fmaxf(pan, 0.0f), 1.0f);
@@ -273,7 +281,8 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
     const int inst = v->inst;
     const float dt = 1.0f / QUILT_SR;
     const int press_src = (int)slot(q, inst, "a_press", 0.0f);
-    const float air = slot(q, inst, "a_air", 0.4f) * r->noise;
+    const float air = slot(q, inst, "a_air", 0.26f) * r->noise;
+    const float air_heard = noise_amount(slot(q, inst, "a_air", 0.26f), 6.0f) * r->noise;
     const float soft = q->gs[G_SOFT];
     /* SOFT: a gentler breath, less of it and more of it noise. */
     const float breath_max = r->breath * (1.15f - 0.35f * soft);
@@ -304,12 +313,19 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
     }
     const float soft_e = a->soft_eff;
 
-    /* The reads hold still across the block (the vibrato moves once a
-     * block), and so, nearly, does the jet's offset. */
-    const lag_t lb = lag_at(fmaxf(2.0f, a->D / ratio)), lj = lag_at(fmaxf(2.0f, a->Dj / ratio));
-    const float y0 = a->offset * a->jamp * 1.57f, ty0 = soft_tanh(y0);
+    /* What is worked out once a block (the vibrato, and the voice reshaped
+     * as the breath moves) glides across it from where the last block
+     * ended, so nothing steps: two reads of each line, faded between, and
+     * the jet's gain, its offset and the level make-up ramped. */
+    const float Db = fmaxf(2.0f, a->D / ratio), Dj = fmaxf(2.0f, a->Dj / ratio);
+    const lag_t lb0 = lag_at(a->Db_was), lb = lag_at(Db), lj0 = lag_at(a->Dj_was), lj = lag_at(Dj);
+    const int glide_b = Db != a->Db_was, glide_j = Dj != a->Dj_was;
+    const float y0_to = a->offset * a->jamp * 1.57f, jg_to = a->jet_th * a->over;
+    const float inv = 1.0f / (float)frames;
     float peak = 0.0f;
     for (int n = 0; n < frames; n++) {
+        const float x = (float)(n + 1) * inv;
+        const float y0 = a->y0_was + (y0_to - a->y0_was) * x, ty0 = soft_tanh(y0);
         a->env += ((v->held ? a->lvl : 0.0f) - a->env) * (v->held ? a->att_k : a->rel_k);
         float p = a->env;
         if (v->got_press && press_src != 1) {
@@ -333,6 +349,7 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
 
         if (r->kind == AK_JET || r->kind == AK_STOPPED) {
             float o = lag_read(a->bore, BORE_MASK, a->bw, &lb);
+            if (glide_b) o = lag_read(a->bore, BORE_MASK, a->bw, &lb0) * (1.0f - x) + o * x;
             a->lp += (1.0f - a->lpa) * (o - a->lp);
             float back = r->kind == AK_STOPPED ? -a->lp : a->lp;
             float d = back - a->dcx + 0.995f * a->dcy;
@@ -349,12 +366,13 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
             a->jet[a->jw] = a->jlp;
             a->jw = (a->jw + 1) & JET_MASK;
             float jv = lag_read(a->jet, JET_MASK, a->jw, &lj);
+            if (glide_j) jv = lag_read(a->jet, JET_MASK, a->jw, &lj0) * (1.0f - x) + jv * x;
             /* The jet's deflection against the breath: a stronger breath
              * carries a stronger jet, so the shape holds and the level
              * follows the breath, a little brighter as it rises. */
             /* The attack's surge: a stronger jet for the first 50 ms or
              * so, which is what makes a pipe speak quickly. */
-            float dev = a->jet_th * a->over * (1.0f + a->surge) *
+            float dev = (a->jg_was + (jg_to - a->jg_was) * x) * (1.0f + a->surge) *
                         a->js * jv / fmaxf(breath, 0.02f);
             a->surge *= surge_k;
             a->jamp += (fabsf(dev) - a->jamp) * 0.001f;
@@ -371,6 +389,7 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
         } else if (r->kind == AK_REED) {
             /* The bore returns with the end's averaging loss, inverted. */
             float o = lag_read(a->bore, BORE_MASK, a->bw, &lb);
+            if (glide_b) o = lag_read(a->bore, BORE_MASK, a->bw, &lb0) * (1.0f - x) + o * x;
             a->lp += (1.0f - a->lpa) * (o - a->lp);
             float pd = -0.95f * a->lp - rand_p;
             /* REED: a soft reed slams shut more readily, so it cuts the
@@ -426,13 +445,13 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
         }
 
         /* AIR: the breath itself, heard beside the note. */
-        y += (nz - a->nz_lp) * air * breath * a->noise_out;
+        y += tint(&a->nz_t, nz) * air_heard * breath * a->noise_out;
         /* PUFF: the chiff, edge noise as the pipe speaks. */
         if (a->chiff > 1e-4f) {
-            y += (nz - a->nz_lp) * a->chiff * p * 4.0f;
+            y += tint(&a->chiff_t, nz) * a->chiff * p * 4.0f;
             a->chiff *= chiff_k;
         }
-        y *= a->level * a->comp * v->fade;
+        y *= a->level * (a->comp_was + (a->comp - a->comp_was) * x) * v->fade;
         if (v->fade_step > 0.0f) v->fade = fmaxf(0.0f, v->fade - v->fade_step);
         float m = fabsf(y);
         if (m > peak) peak = m;
@@ -440,7 +459,12 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
         right[n] += y * a->pan_r;
         a->t += dt;
     }
-    v->mv.peak = peak;
+    a->Db_was = Db;
+    a->Dj_was = Dj;
+    a->comp_was = a->comp;
+    a->y0_was = y0_to;
+    a->jg_was = jg_to;
+    v->peak = peak;
     if ((!v->held && a->env < 1e-4f && peak < 1e-5f) || (v->fade_step > 0.0f && v->fade <= 0.0f))
         v->active = 0;
 }

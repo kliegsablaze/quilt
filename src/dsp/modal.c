@@ -88,13 +88,13 @@ typedef struct {
 /* Vibraphone: aluminium bars tuned 1 : 4 : ~10, with weak torsional modes
  * that give the metal its shimmer. Relative T60 per mode. */
 static const float VIB_RATIO[] = { 1.0f, 3.99f, 9.85f, 2.71f, 6.38f, 16.4f };
-static const float VIB_AMP[] = { 1.0f, 0.9f, 0.3f, 0.035f, 0.025f, 0.03f };
-static const float VIB_T60[] = { 1.0f, 0.42f, 0.17f, 0.30f, 0.18f, 0.08f };
+static const float VIB_AMP[] = { 1.0f, 0.25f, 0.15f, 0.035f, 0.025f, 0.03f };
+static const float VIB_T60[] = { 1.0f, 0.3f, 0.1f, 0.30f, 0.18f, 0.08f };
 
 /* Marimba: rosewood, 1 : 4 : 10, losses that take the overtones away fast. */
 static const float MAR_RATIO[] = { 1.0f, 3.98f, 9.92f, 2.32f, 17.1f };
-static const float MAR_AMP[] = { 1.0f, 0.8f, 0.25f, 0.02f, 0.02f };
-static const float MAR_T60[] = { 1.0f, 0.28f, 0.10f, 0.25f, 0.05f };
+static const float MAR_AMP[] = { 1.0f, 0.65f, 0.1f, 0.02f, 0.02f };
+static const float MAR_T60[] = { 1.0f, 0.2f, 0.08f, 0.25f, 0.05f };
 
 /* Xylophone: rosewood undercut so the second mode is a twelfth, 1 : 3. */
 static const float XYL_RATIO[] = { 1.0f, 3.0f, 6.17f, 10.2f };
@@ -145,7 +145,7 @@ static const unsigned char HBL_TAG[] = { 0, 0, 2, 1, 0, 0, 0 };
  * with weaker untuned modes between (Morrison & Rossing). RING moves the
  * tuned two. */
 static const float HPN_RATIO[] = { 1.0f, 2.0f, 3.0f, 2.38f, 4.21f };
-static const float HPN_AMP[] = { 1.0f, 0.5f, 0.35f, 0.08f, 0.1f };
+static const float HPN_AMP[] = { 1.0f, 1.0f, 0.6f, 0.08f, 0.1f };
 static const float HPN_T60[] = { 1.0f, 0.6f, 0.45f, 0.3f, 0.25f };
 static const unsigned char HPN_TAG[] = { 0, 1, 1, 0, 0 };
 
@@ -173,30 +173,30 @@ static const float REE_T60[] = { 1.0f, 0.15f, 0.06f };
 #define N(a) ((int)(sizeof(a) / sizeof(a[0])))
 
 static const modal_recipe_t RECIPES[] = {
-    { .name = "Felt Upright", .kind = MK_STRING, .gain = 0.54f, .decay_mult = 1.15f,
-      .bass_B_mult = 2.0f, .B_mult = 1, .mass_mult = 1, .K_mult = 1, .railsback = 1, .prompt_mult = 1, .split_mult = 1, .wa = 0.18f,
+    { .name = "Felt Upright", .kind = MK_STRING, .gain = 0.72f, .decay_mult = 1.15f,
+      .bass_B_mult = 2.0f, .B_mult = 1, .mass_mult = 1, .K_mult = 1, .railsback = 1, .prompt_mult = 2.2f, .split_mult = 1, .wa = 0.07f,
       .damper_top = 88, .ch = CH_FELT, .pan_spread = 0.5f,
       .thump_hz = 700, .thump_ms = 14, .thump_gain = 1.64f },
-    { .name = "Una Corda Grand", .kind = MK_STRING, .gain = 0.36f, .decay_mult = 1.0f,
-      .bass_B_mult = 1.0f, .B_mult = 1, .mass_mult = 1, .K_mult = 1, .railsback = 1, .prompt_mult = 1, .split_mult = 1, .wa = 0.18f,
+    { .name = "Una Corda Grand", .kind = MK_STRING, .gain = 0.52f, .decay_mult = 1.0f,
+      .bass_B_mult = 1.0f, .B_mult = 1, .mass_mult = 1, .K_mult = 1, .railsback = 1, .prompt_mult = 2.8f, .split_mult = 1, .wa = 0.07f,
       .damper_top = 88, .ch = CH_HUSH, .pan_spread = 0.6f,
       .thump_hz = 600, .thump_ms = 12, .thump_gain = 1.3f },
-    { .name = "Vibraphone", .kind = MK_BAR, .gain = 0.43f,
+    { .name = "Vibraphone", .kind = MK_BAR, .gain = 0.354f,
       .ratio = VIB_RATIO, .amp = VIB_AMP, .t60r = VIB_T60, .nmodes = N(VIB_RATIO),
-      .t60_ref = 7.0f, .f_ref = 349.0f, .t60_slope = 0.6f,
+      .t60_ref = 21.0f, .f_ref = 349.0f, .t60_slope = 0.6f,
       .mass = 0.003f, .K = 2e9f, .p = 2.3f, .kb = 4e5f, .r = 40.0f,
       .dampers = 1, .ch = CH_MOTOR, .pan_spread = 0.5f,
       .thump_hz = 2500, .thump_ms = 3, .thump_gain = 2.39f },
-    { .name = "Marimba", .kind = MK_BAR, .gain = 0.616f,
+    { .name = "Marimba", .kind = MK_BAR, .gain = 0.588f,
       .ratio = MAR_RATIO, .amp = MAR_AMP, .t60r = MAR_T60, .nmodes = N(MAR_RATIO),
-      .t60_ref = 1.3f, .f_ref = 261.6f, .t60_slope = 0.7f,
+      .t60_ref = 1.3f, .f_ref = 261.6f, .t60_slope = 0.4f,
       .mass = 0.004f, .K = 8e8f, .p = 2.3f, .kb = 3e5f, .r = 40.0f,
       .ch = CH_ROLL, .pan_spread = 0.6f,
       .thump_hz = 1800, .thump_ms = 4, .thump_gain = 3.83f },
     /* Short, stiff strings heard through piezo pickups at the bridge, no
      * soundboard (the Yamaha CP-70). */
-    { .name = "Electric Grand", .kind = MK_STRING, .gain = 0.623f, .decay_mult = 1.1f,
-      .bass_B_mult = 4.0f, .B_mult = 1.5f, .mass_mult = 0.7f, .K_mult = 0.3f, .railsback = 1, .prompt_mult = 0.4f, .split_mult = 1, .wa = 0.18f,
+    { .name = "Electric Grand", .kind = MK_STRING, .gain = 0.724f, .decay_mult = 1.1f,
+      .bass_B_mult = 4.0f, .B_mult = 1.5f, .mass_mult = 0.7f, .K_mult = 0.3f, .railsback = 1, .prompt_mult = 0.9f, .split_mult = 1, .wa = 0.12f,
       .damper_top = 88, .ch = CH_TWANG, .pan_spread = 0.5f,
       .thump_hz = 800, .thump_ms = 10, .thump_gain = 2.4f },
     /* Light beaters, felt on one face, on thin wire courses with no dampers. */
@@ -240,9 +240,9 @@ static const modal_recipe_t RECIPES[] = {
       .ch = CH_BUZZ, .pan_spread = 0.5f,
       .thump_hz = 400, .thump_ms = 8, .thump_gain = 4.44f },
     /* Rawhide hammers on brass tubes, with a damper pedal. */
-    { .name = "Tubular Bells", .kind = MK_BAR, .gain = 0.219f,
+    { .name = "Tubular Bells", .kind = MK_BAR, .gain = 0.152f,
       .ratio = TUB_RATIO, .amp = TUB_AMP, .t60r = TUB_T60, .tag = TUB_TAG, .nmodes = N(TUB_RATIO),
-      .t60_ref = 8.0f, .f_ref = 261.6f, .t60_slope = 0.5f,
+      .t60_ref = 16.0f, .f_ref = 261.6f, .t60_slope = 0.5f,
       .mass = 0.01f, .K = 2e10f, .p = 2.85f, .kb = 2e6f, .r = 40.0f,
       .soft_comp = 0.2f, .dampers = 1, .ch = CH_MUTE, .pan_spread = 0.4f,
       .thump_hz = 1500, .thump_ms = 3, .thump_gain = 4.83f },
@@ -254,11 +254,11 @@ static const modal_recipe_t RECIPES[] = {
       .soft_comp = 0.15f, .ch = CH_MINOR, .transpose = 12, .pan_spread = 0.5f,
       .thump_hz = 2000, .thump_ms = 2, .thump_gain = 3.91f },
     /* Fingers on hammered steel, over the shell's air. */
-    { .name = "Handpan", .kind = MK_BAR, .gain = 0.24f,
+    { .name = "Handpan", .kind = MK_BAR, .gain = 0.178f,
       .ratio = HPN_RATIO, .amp = HPN_AMP, .t60r = HPN_T60, .tag = HPN_TAG, .nmodes = N(HPN_RATIO),
-      .cavity_hz = 90.0f, .t60_ref = 4.0f, .f_ref = 261.6f, .t60_slope = 0.4f,
+      .cavity_hz = 90.0f, .t60_ref = 7.0f, .f_ref = 261.6f, .t60_slope = 0.4f,
       .mass = 0.008f, .K = 1.5e8f, .p = 2.3f, .kb = 4e5f, .r = 40.0f,
-      .ch = CH_RING, .pan_spread = 0.5f,
+      .soft_comp = 0.05f, .ch = CH_RING, .pan_spread = 0.5f,
       .thump_hz = 300, .thump_ms = 6, .thump_gain = 7.5f },
     /* Rubber mallets on steel tongues over a box. */
     { .name = "Tongue Drum", .kind = MK_BAR, .gain = 0.334f,
@@ -363,13 +363,24 @@ static void set_osc(modal_voice_t *m, int i, float f, float sigma, float sigma_d
     m->in[i / 4][i % 4] = in;
 }
 
-static void apply_damping(modal_voice_t *m, int damped) {
+/* The dampers settle on the strings, or lift, over about 40 ms: each
+ * mode's decay moves from its ringing rate to its damped one a step a
+ * block, evenly in rate (r geometrically), never all at once, which would
+ * take a strongly damped mode's level down in a sample, a click. */
+#define DAMP_GLIDE 0.04f
+static void apply_damping(modal_voice_t *m, float x) {
     for (int g = 0; g < m->n4; g++) {
-        v4 r = damped ? m->rd[g] : m->rr[g];
+        v4 r;
+        if (x <= 0.0f) r = m->rr[g];
+        else if (x >= 1.0f) r = m->rd[g];
+        else
+            for (int k = 0; k < 4; k++)
+                r[k] = m->rr[g][k] > 0.0f && m->rd[g][k] > 0.0f
+                           ? expf((1.0f - x) * logf(m->rr[g][k]) + x * logf(m->rd[g][k])) : m->rd[g][k];
         m->c[g] = r * m->cw[g];
         m->s[g] = r * m->sw[g];
     }
-    m->damped = damped;
+    m->damp_x = x;
 }
 
 static float soft_mult(const quilt_t *q) {
@@ -379,7 +390,7 @@ static float soft_mult(const quilt_t *q) {
 
 /* How loud the mechanism is: NOISE alone. */
 static float noise_level(const quilt_t *q, int inst) {
-    return slot(q, inst, "m_noise", 0.4f) * 1.1f;
+    return noise_amount(slot(q, inst, "m_noise", 0.38f), 3.0f);
 }
 
 static void strike(quilt_t *q, voice_t *v, const modal_recipe_t *r, float v0) {
@@ -462,7 +473,7 @@ void modal_note_on(quilt_t *q, voice_t *v, int granted) {
         float K = K0 * soft_mult(q);
         float p = by_note(note, 2.3f, 2.5f, 3.0f, 0);
         float z = by_note(note, 2.5f, 1.62f, 0.9f, 1);
-        float after = 0.8f, twang = 0.0f;   /* the aftersound's loss, the pickups' tilt */
+        float after = 0.55f, twang = 0.0f;  /* the aftersound's loss, the pickups' tilt */
         float bloom_cents = 0.0f, bloom = 0.0f;
         if (r->ch == CH_FELT) {
             /* FELT: the moderator strip, a much softer, thicker layer in the way. */
@@ -474,7 +485,7 @@ void modal_note_on(quilt_t *q, voice_t *v, int granted) {
              * on unworn felt. The unstruck string sings through the bridge, so
              * the aftersound grows as the prompt sound falls. */
             K *= powf(0.05f, charv);
-            wa += 0.55f * charv;
+            wa += 0.2f * charv;
         } else if (r->ch == CH_BLOOM) {
             /* BLOOM: the other courses, never damped, take up the partials
              * they share and ring on, a little out of tune with the struck
@@ -597,11 +608,13 @@ void modal_note_on(quilt_t *q, voice_t *v, int granted) {
     }
     m->pan_r = sqrtf(fmaxf(0.0f, 1.0f - m->pan_l * m->pan_l));
     m->n4 = (n + 3) / 4;
+    v->osc = m->n4 * 4;
     for (int i = n; i < m->n4 * 4; i++) set_osc(m, i, 0.0f, 0.0f, 0.0f, 0.0f);
-    apply_damping(m, 0);
+    apply_damping(m, 0.0f);
+    m->damped = 0;
 
-    m->thump_k = 1.0f - expf(-TWO_PI * r->thump_hz / QUILT_SR);
-    m->hiss_k = 1.0f - expf(-TWO_PI * 1500.0f / QUILT_SR);
+    tint_set(&m->thump_t, r->thump_hz, 1.0f);
+    tint_set(&m->hiss_t, 800.0f, 0.8f);
     float vel = v->vel;
     /* A key or pad's velocity is a speed, so hammer and mallet speed follow it
      * in proportion: about 0.3 to 4.5 m/s for the hammers (Chaigne &
@@ -620,8 +633,12 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
      * none at the very top; a marimba is damped only by DAMP (the hand). */
     int pedal = q->pedal || slot(q, v->inst, "m_pedal", 0.0f) >= 0.5f;
     int damped = m->dampable && !v->held && !pedal;
+    if (m->damp_x != (float)damped) {
+        const float step = dt / DAMP_GLIDE;
+        apply_damping(m, damped ? fminf(1.0f, m->damp_x + step) : fmaxf(0.0f, m->damp_x - step));
+    }
     if (damped != m->damped) {
-        apply_damping(m, damped);
+        m->damped = damped;
         if (damped && r->kind == MK_STRING) {
             /* The damper felt landing. */
             m->hiss_env = 1.0f;
@@ -739,13 +756,11 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
         y *= m->level;
         float knock = 0.0f;
         if (m->thump_env > 1e-4f) {
-            m->thump_lp += (noise(&m->rng) - m->thump_lp) * m->thump_k;
-            knock += m->thump_lp * m->thump_env * m->thump_a;
+            knock += tint(&m->thump_t, noise(&m->rng)) * m->thump_env * m->thump_a;
             m->thump_env *= td;
         }
         if (m->hiss_env > 1e-4f) {
-            m->hiss_lp += (noise(&m->rng) - m->hiss_lp) * m->hiss_k;
-            knock += m->hiss_lp * m->hiss_env * m->hiss_a;
+            knock += tint(&m->hiss_t, noise(&m->rng)) * m->hiss_env * m->hiss_a;
             m->hiss_env *= hd;
         }
         if (buzz_a > 0.0f) {
@@ -761,11 +776,12 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
         if (v->fade_step > 0.0f) v->fade = fmaxf(0.0f, v->fade - v->fade_step);
         float a = fabsf(y);
         if (a > peak) peak = a;
-        left[n] += y * m->pan_l + knock * 0.5f;
-        right[n] += y * m->pan_r + knock * 0.5f;
+        /* The knock comes from where the note does. */
+        left[n] += (y + knock * 0.71f) * m->pan_l;
+        right[n] += (y + knock * 0.71f) * m->pan_r;
         if (r->kind == MK_STRING) board[n] += (y + knock * 2.0f) * m->body;
     }
-    m->peak = peak;
+    v->peak = peak;
 
     /* Retire it once it has fallen 100 dB below full scale and nothing drives it. */
     if ((peak < 1e-5f && !m->ct.active && m->thump_env < 1e-4f && m->hiss_env < 1e-4f &&

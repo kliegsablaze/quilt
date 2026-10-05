@@ -105,6 +105,6 @@ void fm_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
         left[n] += y * pl;
         right[n] += y * pr;
     }
-    v->mv.peak = peak;
+    v->peak = peak;
     if ((m->amp < 1e-5f) || (v->fade_step > 0.0f && v->fade <= 0.0f)) v->active = 0;
 }

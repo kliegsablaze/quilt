@@ -28,7 +28,7 @@ static const param_def_t MODAL_KEYS[] = {
     F("m_stiff", "Stiff", "String Stiffness", 0.5f),
     F("m_spot", "Spot", "Strike Point", 0.3f),
     F("m_body", "Body", "Body", 0.5f),
-    F("m_noise", "Noise", "Mechanism Noise", 0.4f),
+    F("m_noise", "Noise", "Mechanism Noise", 0.38f),
     F("m_damp", "Damp", "Damper", 0.5f),
     F("m_pedal", "Pedal", "Sustain Pedal", 0.0f),
 };
@@ -37,7 +37,7 @@ static const param_def_t PLUCKED_KEYS[] = {
     F("p_spot", "Spot", "Pluck Point", 0.3f),
     F("p_body", "Body", "Body", 0.5f),
     F("p_edge", "Edge", "Edge (Brightness)", 0.5f),
-    F("p_noise", "Noise", "Finger Noise", 0.3f),
+    F("p_noise", "Noise", "Finger Noise", 0.37f),
     F("p_damp", "Damp", "Damper", 0.3f),
     F("p_stiff", "Stiff", "String Stiffness", 0.3f),
 };
@@ -47,7 +47,7 @@ static const param_def_t BOWED_KEYS[] = {
     F("b_edge", "Edge", "Edge (Brightness)", 0.4f),
     E("b_press", "Press", "Pressure Source", PRESS_OPTS, 0.0f),
     F("b_swell", "Swell", "Swell Time", 0.3f),
-    F("b_noise", "Noise", "Bow Noise", 0.3f),
+    F("b_noise", "Noise", "Bow Noise", 0.2f),
     F("b_bite", "Bite", "Bow Bite", 0.3f),
 };
 
@@ -57,7 +57,7 @@ static const param_def_t BANDED_KEYS[] = {
     F("d_hit", "Hit", "Strike Mix", 0.0f),
     E("d_press", "Press", "Pressure Source", PRESS_OPTS, 0.0f),
     F("d_swell", "Swell", "Swell Time", 0.4f),
-    F("d_noise", "Noise", "Friction Noise", 0.2f),
+    F("d_noise", "Noise", "Friction Noise", 0.17f),
 };
 
 static const param_def_t AIR_KEYS[] = {
@@ -65,7 +65,7 @@ static const param_def_t AIR_KEYS[] = {
     F("a_edge", "Edge", "Edge (Brightness)", 0.4f),
     E("a_press", "Press", "Pressure Source", PRESS_OPTS, 0.0f),
     F("a_swell", "Swell", "Swell Time", 0.2f),
-    F("a_air", "Air", "Breath Noise", 0.4f),
+    F("a_air", "Air", "Breath Noise", 0.26f),
 };
 
 static const param_def_t ORGAN_KEYS[] = {
@@ -175,7 +175,7 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
     { "Harp", "harp", S, ENG_WAVEGUIDE, SH_PLUCKED, "Bloom", "Sympathetic Ring", .6f, .7f, 0, .35f },
     { "Nylon Guitar", "nylon_guitar", S, ENG_WAVEGUIDE, SH_PLUCKED, "Bloom", "Sympathetic Ring", .6f, .5f, 0, .2f },
     { "Hammered Dulcimer", "hammered_dulcimer", S, ENG_MODAL, SH_MODAL, "Bloom", "Sympathetic Ring", .6f, .55f, 0, .25f },
-    { "Pizzicato", "pizzicato", S, ENG_WAVEGUIDE, SH_PLUCKED, "Deep", "Viola to Cello", .7f, .5f, 0, .3f },
+    { "Pizzicato", "pizzicato", S, ENG_WAVEGUIDE, SH_PLUCKED, "Deep", "Viola to Cello", .7f, .65f, 0, .3f },
     { "Solo Cello", "solo_cello", S, ENG_WAVEGUIDE, SH_BOWED, "Veil", "Bow Position (Sul Tasto)", .6f, .4f, .3f, .3f },
     { "Solo Violin", "solo_violin", S, ENG_WAVEGUIDE, SH_BOWED, "Veil", "Bow Position (Sul Tasto)", .6f, .4f, .3f, .3f },
     { "String Section", "string_section", S, ENG_WAVEGUIDE, SH_BOWED, "Width", "Player Spread", .6f, .5f, .2f, .4f },
@@ -184,11 +184,11 @@ const instrument_t QUILT_INST[QUILT_NINST] = {
     { "Glass Harmonica", "glass_harmonica", G, ENG_BANDED, SH_BANDED, "Wet", "Wet Finger", .7f, .5f, 0, .35f },
     { "Singing Bowl", "singing_bowl", G, ENG_BANDED, SH_BANDED, "Beat", "Mode Beating", .6f, .65f, 0, .35f },
 
-    { "Flute", "flute", B, ENG_AIR, SH_AIR, "Cover", "Lip Cover", .6f, .3f, .25f, .3f },
+    { "Flute", "flute", B, ENG_AIR, SH_AIR, "Cover", "Lip Cover", .6f, .3f, .4f, .3f },
     { "Pan Flute", "pan_flute", B, ENG_AIR, SH_AIR, "Puff", "Chiff", .6f, .3f, .15f, .35f },
     { "Ocarina", "ocarina", B, ENG_AIR, SH_AIR, "Pure", "Purity", .6f, .3f, .15f, .3f },
     { "Recorder", "recorder", B, ENG_AIR, SH_AIR, "Puff", "Chiff", .6f, .3f, .1f, .3f },
-    { "Clarinet", "clarinet", B, ENG_AIR, SH_AIR, "Reed", "Reed Stiffness", .6f, .35f, .2f, .3f },
+    { "Clarinet", "clarinet", B, ENG_AIR, SH_AIR, "Reed", "Reed Stiffness", .6f, .35f, 0, .3f },
     { "Choir", "choir", B, ENG_SYNTHETIC, SH_CHOIR, "Vowel", "Vowel (Oo, Oh, Ah)", .6f, .5f, .2f, .45f },
 };
 
@@ -203,6 +203,7 @@ const char *const QUILT_TYPE_NAMES[QUILT_NTYPES] = {
     "Pizzicato", "Solo Cello", "Solo Violin", "String Section",
     "Bowed Vibes", "Glass Harmonica", "Singing Bowl",
     "Flute", "Pan Flute", "Ocarina", "Recorder", "Clarinet",
+    "Choir",
 };
 
 const param_def_t QUILT_TYPE_PARAM = {
@@ -226,24 +227,24 @@ int quilt_type_index(int inst) {
 static const struct { const char *name, *values; } VOICINGS[] = {
     /* Close and intimate (Frahm): a thick strip, the action loud and near, a
      * little presence, a small warm room. */
-    { "Felt Upright", "char=0.35 m_noise=0.6 m_split=0.3 m_body=0.6 m_damp=0.3 "
+    { "Felt Upright", "char=0.35 m_noise=0.47 m_split=0.6 m_body=0.6 m_damp=0.3 "
                       "size=0.35 dark=0.55 delay=0.08 tone=0.55 drive=0.1" },
     /* Further off, on two strings, a touch darker, in a large hall. */
-    { "Una Corda Grand", "char=0.45 m_noise=0.21 m_spot=0.25 m_split=0.25 m_body=0.55 m_damp=0.3 "
+    { "Una Corda Grand", "char=0.45 m_noise=0.28 m_spot=0.25 m_split=0.45 m_body=0.55 m_damp=0.3 "
                          "size=0.65 dark=0.45 delay=0.3 tone=0.45" },
     /* A slow motor, released bars left to ring a little, a shimmering plate. */
-    { "Vibraphone", "char=0.22 m_split=0.05 m_body=0.7 m_noise=0.15 m_damp=0.15 "
+    { "Vibraphone", "char=0.22 m_split=0.05 m_body=0.7 m_noise=0.23 m_damp=0.15 "
                     "size=0.6 dark=0.35 delay=0.25" },
     /* A CP-70 in a ballad: pickups a third up, a slow auto-pan, a modest room. */
-    { "Electric Grand", "char=0.35 m_noise=0.3 m_body=0.5 m_split=0.2 m_damp=0.3 "
+    { "Electric Grand", "char=0.35 m_noise=0.33 m_body=0.5 m_split=0.2 m_damp=0.3 "
                         "size=0.45 dark=0.5 delay=0.12 speed=0.25" },
     /* A suitcase tine piano: voiced a little toward bark, the stereo
      * vibrato slow, a small room. */
-    { "Tine Piano", "char=0.4 m_split=0.1 m_body=0.6 m_noise=0.25 m_damp=0.3 "
+    { "Tine Piano", "char=0.4 m_split=0.1 m_body=0.6 m_noise=0.3 m_damp=0.3 "
                     "size=0.45 dark=0.5 delay=0.12 speed=0.3" },
     /* A reed piano turned down in a small room: its own tremolo, the
      * amplifier just warm. */
-    { "Reed Piano", "char=0.45 m_split=0.08 m_body=0.5 m_noise=0.25 m_damp=0.3 "
+    { "Reed Piano", "char=0.45 m_split=0.08 m_body=0.5 m_noise=0.3 m_damp=0.3 "
                     "size=0.35 dark=0.55 delay=0.08 speed=0.45 drive=0.15" },
     /* A Whiter Shade of Pale: flutes 00 8800 000, the Leslie slow, the
      * scanner part way to C3, the preamp a little warm. */
@@ -261,77 +262,83 @@ static const struct { const char *name, *values; } VOICINGS[] = {
     { "String Ensemble", "char=0.7 k_edge=0.3 k_swell=0.45 k_8=0.8 k_4=0.6 k_2=0 "
                          "size=0.65 dark=0.45 delay=0.2 speed=0.3" },
     /* Sugar-plum: felt hammers, a little of the bell, a medium room. */
-    { "Celesta", "char=0.4 m_split=0.05 m_body=0.6 m_noise=0.3 m_damp=0.3 "
+    { "Celesta", "char=0.4 m_split=0.05 m_body=0.6 m_noise=0.33 m_damp=0.3 "
                  "size=0.55 dark=0.4 delay=0.2" },
     /* Slightly out of tune and clangy, in a small room (Cage). */
-    { "Toy Piano", "char=0.5 m_split=0.15 m_body=0.6 m_noise=0.4 m_damp=0 "
+    { "Toy Piano", "char=0.5 m_split=0.15 m_body=0.6 m_noise=0.38 m_damp=0 "
                    "size=0.3 dark=0.5 delay=0.05" },
     /* Yarn mallets on rosewood, nearly dry. */
-    { "Xylophone", "char=0 m_split=0.05 m_body=0.7 m_noise=0.3 m_damp=0 "
+    { "Xylophone", "char=0 m_split=0.05 m_body=0.7 m_noise=0.33 m_damp=0 "
                    "size=0.45 dark=0.5 delay=0.15" },
     /* Soft-wrapped mallets, long-ringing steel, a little darker. */
-    { "Glockenspiel", "char=0.35 m_split=0.05 m_body=0.3 m_noise=0.15 m_damp=0 "
+    { "Glockenspiel", "char=0.35 m_split=0.05 m_body=0.3 m_noise=0.23 m_damp=0 "
                       "size=0.6 dark=0.45 delay=0.25 tone=0.45" },
     /* A thumb piano with a touch of its buzzers; BUZZ at zero is a music box. */
-    { "Kalimba / Music Box", "char=0.3 m_split=0.1 m_body=0.7 m_noise=0.3 m_damp=0 "
+    { "Kalimba / Music Box", "char=0.3 m_split=0.1 m_body=0.7 m_noise=0.33 m_damp=0 "
                              "size=0.4 dark=0.5 delay=0.1" },
     /* Chimes in a church: a light hand, the pedal half down, a big room. */
-    { "Tubular Bells", "char=0.2 m_split=0.1 m_body=0.15 m_noise=0.25 m_damp=0.1 "
+    { "Tubular Bells", "char=0.05 m_split=0.1 m_body=0.15 m_noise=0.3 m_damp=0.1 "
                        "size=0.7 dark=0.45 delay=0.3" },
     /* Handbells, the tierce half in, the bells beating gently. */
-    { "Handbells", "char=0.5 m_split=0.15 m_body=0.3 m_noise=0.2 m_damp=0 "
+    { "Handbells", "char=0.5 m_split=0.15 m_body=0.3 m_noise=0.27 m_damp=0 "
                    "size=0.65 dark=0.4 delay=0.25" },
     /* Fingertips on the tuned fields, the shell's air under the low notes. */
-    { "Handpan", "char=0.55 m_split=0.15 m_body=0.6 m_noise=0.3 m_damp=0 "
+    { "Handpan", "char=0.55 m_split=0.15 m_body=0.6 m_noise=0.33 m_damp=0 "
                  "size=0.6 dark=0.45 delay=0.2" },
     /* Rubber mallets, a wooden box, a small room. */
-    { "Tongue Drum", "char=0.5 m_split=0.1 m_body=0.65 m_noise=0.3 m_damp=0 "
+    { "Tongue Drum", "char=0.5 m_split=0.1 m_body=0.65 m_noise=0.33 m_damp=0 "
                      "size=0.45 dark=0.5 delay=0.12" },
     /* Courses a little apart, struck near the bridge, the undamped strings blooming. */
-    { "Hammered Dulcimer", "char=0.55 m_split=0.35 m_spot=0.2 m_body=0.8 m_noise=0.3 m_damp=0 "
+    { "Hammered Dulcimer", "char=0.55 m_split=0.35 m_spot=0.2 m_body=0.8 m_noise=0.33 m_damp=0 "
                            "size=0.5 dark=0.45 delay=0.15" },
     /* A clavichord in a small room: the tangent toward the end, stiff brass,
      * the Bebung half in for when the pad is pressed. */
-    { "Clavichord", "char=0.5 p_spot=0.25 p_body=0.5 p_edge=0.6 p_noise=0.35 p_damp=0.5 p_stiff=0.5 "
+    { "Clavichord", "char=0.5 p_spot=0.25 p_body=0.5 p_edge=0.6 p_noise=0.4 p_damp=0.5 p_stiff=0.5 "
                     "size=0.3 dark=0.5 delay=0.05" },
     /* A concert harp in a hall, its lower strings answering. */
-    { "Harp", "char=0.4 p_spot=0.35 p_body=0.6 p_edge=0.45 p_noise=0.2 p_damp=0.05 p_stiff=0.2 "
+    { "Harp", "char=0.4 p_spot=0.35 p_body=0.6 p_edge=0.45 p_noise=0.3 p_damp=0.05 p_stiff=0.2 "
               "size=0.65 dark=0.45 delay=0.25" },
     /* Fingerstyle near the soundhole, the open strings ringing a little. */
-    { "Nylon Guitar", "char=0.35 p_spot=0.25 p_body=0.65 p_edge=0.4 p_noise=0.3 p_damp=0.2 p_stiff=0.25 "
+    { "Nylon Guitar", "char=0.35 p_spot=0.25 p_body=0.65 p_edge=0.2 p_noise=0.37 p_damp=0.2 p_stiff=0.25 "
                       "size=0.45 dark=0.5 delay=0.12" },
     /* Cellos and violas plucked with the pad of the finger, nearer the cello. */
-    { "Pizzicato", "char=0.6 p_spot=0.45 p_body=0.7 p_edge=0.3 p_noise=0.35 p_damp=0.3 p_stiff=0.15 "
+    { "Pizzicato", "char=0.6 p_spot=0.45 p_body=0.7 p_edge=0.3 p_noise=0.4 p_damp=0.3 p_stiff=0.15 "
                    "size=0.6 dark=0.45 delay=0.2" },
     /* Sul tasto, a light bow, a slow vibrato, in a warm room. */
-    { "Solo Cello", "char=0.6 b_body=0.6 b_edge=0.4 b_press=0 b_swell=0.2 b_noise=0.25 b_bite=0.3 "
+    { "Solo Cello", "char=0.6 b_body=0.6 b_edge=0.4 b_press=0 b_swell=0.2 b_noise=0.18 b_bite=0.3 "
                     "size=0.5 dark=0.5 delay=0.15 speed=0.65" },
-    /* Flautando: fast and light over the fingerboard. */
-    { "Solo Violin", "char=0.6 b_body=0.6 b_edge=0.45 b_press=0 b_swell=0.3 b_noise=0.25 b_bite=0.25 "
+    /* Ordinary bowing, between the fingerboard and the bridge, so the
+     * bridge's bright resonances sing (the Iowa recordings). */
+    { "Solo Violin", "char=0.4 b_body=0.6 b_edge=0.45 b_press=0 b_swell=0.3 b_noise=0.18 b_bite=0.25 "
                      "size=0.55 dark=0.45 delay=0.18 speed=0.68" },
     /* A section in a hall, the players a little apart. */
-    { "String Section", "char=0.5 b_body=0.6 b_edge=0.4 b_press=0 b_swell=0.3 b_noise=0.2 b_bite=0.2 "
+    { "String Section", "char=0.5 b_body=0.6 b_edge=0.4 b_press=0 b_swell=0.3 b_noise=0.16 b_bite=0.2 "
                         "size=0.7 dark=0.45 delay=0.25 speed=0.62" },
-    /* A flute in a warm hall, the lip a little over the hole, a gentle vibrato. */
-    { "Flute", "char=0.3 a_onset=0.3 a_edge=0.45 a_press=0 a_swell=0.2 a_air=0.3 "
-               "size=0.6 dark=0.45 delay=0.2 speed=0.65" },
+    /* A flute in a warm hall, the lip a little over the hole, a player's
+     * vibrato: about 4.5 Hz and a dozen cents (the Iowa recordings). */
+    { "Flute", "char=0.3 a_onset=0.3 a_edge=0.45 a_press=0 a_swell=0.2 a_air=0.22 "
+               "size=0.6 dark=0.45 delay=0.2 speed=0.5" },
     /* Stopped cane pipes, breathy, with their puff. */
-    { "Pan Flute", "char=0.5 a_onset=0.25 a_edge=0.4 a_press=0 a_swell=0.2 a_air=0.25 "
+    { "Pan Flute", "char=0.5 a_onset=0.25 a_edge=0.4 a_press=0 a_swell=0.2 a_air=0.2 "
                    "size=0.65 dark=0.45 delay=0.25 speed=0.55" },
     /* A clay vessel, nearly a pure tone, a slow vibrato. */
-    { "Ocarina", "char=0.5 a_onset=0.3 a_edge=0.4 a_press=0 a_swell=0.1 a_air=0.35 "
+    { "Ocarina", "char=0.5 a_onset=0.3 a_edge=0.4 a_press=0 a_swell=0.1 a_air=0.24 "
                  "size=0.55 dark=0.45 delay=0.2 speed=0.55" },
     /* A wooden recorder: steady, sweet, a little chiff. */
-    { "Recorder", "char=0.4 a_onset=0.35 a_edge=0.45 a_press=0 a_swell=0.15 a_air=0.3 "
+    { "Recorder", "char=0.4 a_onset=0.35 a_edge=0.45 a_press=0 a_swell=0.15 a_air=0.22 "
                   "size=0.5 dark=0.5 delay=0.15 speed=0.5" },
-    /* The chalumeau: a soft reed, low breath. */
-    { "Clarinet", "char=0.3 a_onset=0.3 a_edge=0.4 a_press=0 a_swell=0.2 a_air=0.3 "
+    /* The chalumeau: a soft reed, low breath, and no vibrato, as
+     * clarinettists play. */
+    { "Clarinet", "char=0.3 a_onset=0.3 a_edge=0.4 a_press=0 a_swell=0.2 a_air=0.22 "
                   "size=0.55 dark=0.5 delay=0.18 speed=0.55" },
+    /* A small choir on oo in a stone room, breathing together. */
+    { "Choir", "char=0.25 v_crowd=3 v_air=0.3 v_swell=0.4 v_press=0 v_split=0.3 "
+               "size=0.7 dark=0.45 delay=0.2 speed=0.45" },
     /* A harmonium in a small room, the céleste half in (Nico). */
-    { "Harmonium", "char=0.4 a_onset=0.2 a_edge=0.4 a_press=0 a_swell=0.3 a_air=0.3 "
+    { "Harmonium", "char=0.4 a_onset=0.2 a_edge=0.4 a_press=0 a_swell=0.3 a_air=0.22 "
                    "size=0.4 dark=0.5 delay=0.1 speed=0.4" },
     /* A vibraphone bar bowed on its end, the motor off, ringing on. */
-    { "Bowed Vibes", "char=0.5 d_bow=0.4 d_blur=0.15 d_hit=0 d_press=0 d_swell=0.35 d_noise=0.2 "
+    { "Bowed Vibes", "char=0.5 d_bow=0.4 d_blur=0.15 d_hit=0 d_press=0 d_swell=0.35 d_noise=0.17 "
                      "size=0.65 dark=0.4 delay=0.25" },
     /* Franklin's glass, a wet finger, a slow swell. */
     { "Glass Harmonica", "char=0.5 d_bow=0.4 d_blur=0.1 d_hit=0 d_press=0 d_swell=0.3 d_noise=0.15 "
@@ -340,7 +347,7 @@ static const struct { const char *name, *values; } VOICINGS[] = {
     { "Singing Bowl", "char=0.4 d_bow=0.35 d_blur=0.1 d_hit=0.4 d_press=0 d_swell=0.4 d_noise=0.15 "
                       "size=0.7 dark=0.4 delay=0.3" },
     /* Rosewood and yarn, nearly dry. */
-    { "Marimba", "char=0 m_split=0.05 m_body=0.75 m_damp=0 m_noise=0.32 "
+    { "Marimba", "char=0 m_split=0.05 m_body=0.75 m_damp=0 m_noise=0.34 "
                  "size=0.45 dark=0.5 delay=0.15 tone=0.52" },
 };
 

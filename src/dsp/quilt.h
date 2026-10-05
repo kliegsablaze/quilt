@@ -8,6 +8,7 @@
 #ifndef QUILT_H
 #define QUILT_H
 
+#include <math.h>
 #include <stdint.h>
 
 #include "contact.h"
@@ -19,7 +20,7 @@
 #define MODAL_MAXOSC 160        /* 72 string modes, two strings each, plus spare */
 #define MODAL_BUDGET 1536       /* oscillators across all voices; see Will it fit */
 #define QUILT_NINST 38
-#define QUILT_NTYPES 37        /* the instruments TYPE offers: those built so far */
+#define QUILT_NTYPES 38        /* the instruments TYPE offers: those built so far */
 #define QUILT_MAX_SHAPE_KEYS 16
 
 typedef enum { FAM_KEYS, FAM_MALLETS, FAM_STRINGS, FAM_GLASS, FAM_BREATH } family_t;
@@ -96,6 +97,30 @@ int quilt_format_value(const param_def_t *d, float v, char *buf, int buf_len);
 
 /* ---- the instance ---- */
 
+/* Noise heard as part of a note, not beside it (DESIGN.md, Noise). White
+ * noise through a two-pole band-pass at the noise's own place, then two
+ * one-pole low-passes at half as high again, so above it the noise falls
+ * away 24 dB an octave, as fast as the soft instruments' own tone does,
+ * never a fizz over the top. The band's peak gain is about Q, so what it
+ * keeps is about as loud as before. */
+typedef struct { float f, q, k, s1, s2, lp, lp2; } tint_t;
+static inline void tint_set(tint_t *t, float fc, float Q) {
+    fc = fminf(fc, 6000.0f);            /* the state-variable filter's safe range */
+    t->f = 2.0f * sinf(3.14159265359f * fc / QUILT_SR);
+    t->q = 1.0f / Q;
+    t->k = 1.0f - expf(-6.28318530718f * 1.5f * fc / QUILT_SR);
+}
+/* The noise knobs turn on a square: fine steps among the gentle amounts,
+ * and at full as loud as the coloured noise needs to be plainly heard. */
+static inline float noise_amount(float knob, float full) { return knob * knob * full; }
+static inline float tint(tint_t *t, float x) {
+    t->s2 += t->f * t->s1;
+    t->s1 += t->f * (x - t->s2 - t->q * t->s1);
+    t->lp += (t->s1 - t->lp) * t->k;
+    t->lp2 += (t->lp - t->lp2) * t->k;
+    return t->lp2;
+}
+
 typedef float v4 __attribute__((vector_size(16)));
 
 /* One modal voice: up to MODAL_MAXOSC Mathews-Smith phasors, four at a time.
@@ -109,19 +134,20 @@ typedef struct {
     v4 in[MODAL_MAXOSC / 4];                         /* force -> mode gain */
     v4 am_mask;             /* group 0: oscillators the vibraphone fan moves */
     int has_am, damped, dampable, roll;
+    float damp_x;           /* how far the dampers are down, 0..1, gliding */
     contact_t ct;
     float strike_args[6];   /* mass, K, p, alpha, then kind-specific */
     float x0, f0, v0;
     float level;            /* scale of everything this voice outputs */
     float pan_l, pan_r, body;
-    float thump, thump_env, thump_lp, thump_k, thump_a;
-    float hiss_env, hiss_lp, hiss_k, hiss_a;
+    float thump, thump_env, thump_a;
+    float hiss_env, hiss_a;
+    tint_t thump_t, hiss_t; /* the knock's and the damper's colour */
     float buzz_z, buzz_z2;  /* the kalimba's buzzers */
     float pu_norm, pu_comp, pu_prev;   /* the tine or reed pickup */
     float held_t, roll_t, roll_vel;
     int roll_flip;
     uint32_t rng;
-    float peak;             /* largest output in the last block */
 } modal_voice_t;
 
 /* One Glass E.Piano voice: two FM pairs, phases in cycles. DESIGN.md, Synthetic. */
@@ -147,6 +173,7 @@ typedef struct {
     float g, gd, a, lz;     /* the loss: gain ringing and damped, pole, state */
     float ac, ax1, ay1;     /* the stiffness allpass */
     int dampable;
+    float damp_x, g_was;    /* how far the hand is on the string, 0..1, gliding; the loss last block ended on */
     float level, pan_l, pan_r, body;
     /* the pluck, while it lasts */
     int ex_n, ex_len, hw;
@@ -154,7 +181,8 @@ typedef struct {
     float res_c[4], res_r2[4], res_g[4], res_y1[4], res_y2[4];
     float hist[WG_HIST], comb_d, comb_norm;
     /* the finger's own sound */
-    float nz_env, nz_td, nz_k, nz_k2, nz_lp, nz_lp2, nz_a;
+    float nz_env, nz_td, nz_a;
+    tint_t nz_t;
     uint32_t rng;
 } wg_voice_t;
 
@@ -202,6 +230,7 @@ typedef struct {
     float Db_frac;   /* lift: the bow on the string, 1, to off, 0 */
     float hair_k, force_mul, level, veil_comp;
     float nz_lp;
+    tint_t nz_t;
     uint32_t rng;
 } bow_voice_t;
 
@@ -217,6 +246,8 @@ typedef struct {
     float ph[2], inc[2], swing, speak_k, rank2;   /* the free reed and its céleste */
     float env, att_k, rel_k, lvl, press_s, onset, chiff;
     float nz_lp, vib_ph, t, level, pan_l, pan_r, jlp, jk, js, jamp, offset, jet_mul, noise_out, flow_lp, soft_k, jet_th, comp, rlp2, surge, fc, over, soft_eff, edge, charv;
+    tint_t nz_t, chiff_t;
+    float Db_was, Dj_was, comp_was, y0_was, jg_was;   /* what the last block ended on */
     uint32_t rng;
 } air_voice_t;
 
@@ -236,8 +267,23 @@ typedef struct {
     int n;
     float f0, env, att_k, rel_k, lvl, press_s, lift, hit;
     float r1, r2, nz_lp, level, pan_l, pan_r, beat_hz, wah_ph, touch;
+    tint_t nz_t;
     uint32_t rng;
 } banded_voice_t;
+
+#define CHOIR_SINGERS 3
+#define CHOIR_FORMANTS 5
+typedef struct {
+    float ph[CHOIR_SINGERS], inc[CHOIR_SINGERS], vib_ph[CHOIR_SINGERS], vib_mul[CHOIR_SINGERS];
+    float drift[CHOIR_SINGERS], drift_to[CHOIR_SINGERS], drift_t[CHOIR_SINGERS], drift_amt[CHOIR_SINGERS];
+    float ff[CHOIR_FORMANTS], fb[CHOIR_FORMANTS];            /* the formants, gliding */
+    float cf[2][CHOIR_FORMANTS][3], z[2][CHOIR_FORMANTS][2]; /* each ear's cascade */
+    float shift[2];
+    int n, N;
+    float a, aN1, aN2, norm, soft_eff, mix, crowd_norm;
+    float env, att_k, rel_k, lvl, press_s, t, nz_lp, level, pan_l, pan_r, f0;
+    uint32_t rng;
+} choir_voice_t;
 
 typedef struct {
     int active, held, note, inst;
@@ -245,12 +291,19 @@ typedef struct {
     float vel;
     float press;          /* last pad pressure, 0..1 */
     int got_press;
-    modal_voice_t mv;
-    fm_voice_t fm;
-    wg_voice_t wg;
-    bow_voice_t bow;
-    air_voice_t air;
-    banded_voice_t band;
+    float peak;           /* largest output in the last block, for stealing */
+    int osc;              /* modal oscillators held, against MODAL_BUDGET */
+    /* A voice plays one engine at a time, so they share the space: a new
+     * note clears, and a stolen one copies, the largest of them, not all. */
+    union {
+        modal_voice_t mv;
+        fm_voice_t fm;
+        wg_voice_t wg;
+        bow_voice_t bow;
+        air_voice_t air;
+        banded_voice_t band;
+        choir_voice_t choir;
+    };
 } voice_t;
 
 /* The always-running banks: tonewheels, pipes and the string machine.
@@ -265,7 +318,7 @@ typedef struct {
     float att, att_up;      /* pipe speech or string swell: fundamental, upper partials */
     float contact[9];       /* organ: when each drawbar's contact closes, s */
     int perc;               /* organ: struck while the percussion was fresh */
-    float chiff, bp[2];     /* flute: the chiff's burst and its resonator */
+    float chiff, chiff_up, bp[2];   /* flute: the chiff's burst, its rise, its resonator */
     uint32_t rng;
 } bank_key_t;
 
@@ -385,6 +438,12 @@ int banded_supports(int inst);
 float banded_freq(int inst, int note);
 void banded_note_on(quilt_t *q, voice_t *v);
 void banded_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
+
+/* choir.c */
+int choir_supports(int inst);
+float choir_freq(int inst, int note);
+void choir_note_on(quilt_t *q, voice_t *v);
+void choir_render(quilt_t *q, voice_t *v, float *left, float *right, int frames);
 
 /* banks.c */
 int banks_supports(int inst);

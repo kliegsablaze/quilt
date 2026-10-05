@@ -101,6 +101,7 @@ void banded_note_on(quilt_t *q, voice_t *v) {
     const float charv = q->charv[inst];
     const float blur = slot(q, inst, "d_blur", 0.2f);
     b->f0 = f0;
+    tint_set(&b->nz_t, fminf(fmaxf(3.0f * f0, 600.0f), 2000.0f), 0.7f);
 
     /* The bands: one per mode below 0.45 of the sample rate. BLUR widens
      * them, so the tone is less pure; BEAT parts the bowl's pairs. */
@@ -176,7 +177,7 @@ void banded_render(quilt_t *q, voice_t *v, float *left, float *right, int frames
     const float charv = q->charv[inst];
     const int press_src = (int)slot(q, inst, "d_press", 0.0f);
     const float bow = slot(q, inst, "d_bow", 0.4f);
-    const float noise_a = slot(q, inst, "d_noise", 0.2f) * (r->ch == DC_WET ? 1.0f - 0.6f * charv : 1.0f);
+    const float noise_a = noise_amount(slot(q, inst, "d_noise", 0.17f), 7.0f) * (r->ch == DC_WET ? 1.0f - 0.6f * charv : 1.0f);
     const float soft = q->gs[G_SOFT];
     const float pk = 1.0f - expf(-1.0f / (0.012f * QUILT_SR));
     /* The friction: GRIP presses the bow harder; a wet finger (WET) grips
@@ -276,14 +277,14 @@ void banded_render(quilt_t *q, voice_t *v, float *left, float *right, int frames
         const float y = yf[0] * (1.0f + wah) + yf[1] * (1.0f - wah);
         b->r1 += (y - b->r1) * rk;
         b->r2 += (b->r1 - b->r2) * rk;
-        float out = (b->r2 * comp + (nz - b->nz_lp) * noise_a * p * contact * 0.04f) * b->level * v->fade;
+        float out = (b->r2 * comp + tint(&b->nz_t, nz) * noise_a * p * contact * 0.04f) * b->level * v->fade;
         if (v->fade_step > 0.0f) v->fade = fmaxf(0.0f, v->fade - v->fade_step);
         const float m = fabsf(out);
         if (m > peak) peak = m;
         left[n] += out * b->pan_l;
         right[n] += out * b->pan_r;
     }
-    v->mv.peak = peak;
+    v->peak = peak;
     if ((!v->held && b->env < 1e-4f && peak < 1e-5f) || (v->fade_step > 0.0f && v->fade <= 0.0f))
         v->active = 0;
 }

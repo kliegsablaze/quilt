@@ -114,8 +114,6 @@ static void types(void *p) {
     CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "type by float index");
     A->set_param(p, "type", "Banjo");
     CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "an unknown type is ignored");
-    A->set_param(p, "type", "Choir");
-    CHECK(is(p, "type", QUILT_TYPE_NAMES[2]), "an instrument not built yet is not offered");
     A->set_param(p, "type", "99");
     CHECK(is(p, "type", QUILT_TYPE_NAMES[QUILT_NTYPES - 1]), "an index past the end clamps to the last");
 }
@@ -175,8 +173,9 @@ static void voicings(void *p) {
         CHECK(is(p, "preset_name", QUILT_TYPE_NAMES[t]), "and names its preset");
         dirty(p, slug);
         A->set_param(p, "type", QUILT_TYPE_NAMES[t]);
-        const char *k0 = quilt_shape_param(QUILT_INST[inst].shape, 0)->key;
-        CHECK(fabs(num(p, k0) - 0.97) < 1e-4 && fabs(num(p, "soft") - 0.01) < 1e-4,
+        char ck[64];
+        snprintf(ck, sizeof(ck), "c_%s", slug);
+        CHECK(fabs(num(p, ck) - 0.99) < 1e-4 && fabs(num(p, "soft") - 0.01) < 1e-4,
               "writing %s again keeps what was turned", QUILT_TYPE_NAMES[t]);
         A->destroy_instance(ref);
     }
@@ -216,7 +215,7 @@ static void state(void *p) {
     A->destroy_instance(r);
     A->set_param(q, "state", "{\"v\":7,\"future\":{\"x\":1},\"type\":\"Vibraphone\",\"soft\":\"x\"}");
     CHECK(is(q, "type", "Vibraphone"), "state: unknown keys and values are skipped");
-    A->set_param(q, "state", "{\"type\":\"Choir\"}");
+    A->set_param(q, "state", "{\"type\":\"Banjo\"}");
     CHECK(is(q, "type", "Vibraphone"), "state: an instrument not offered is skipped");
     A->set_param(q, "state", "not json");
     CHECK(is(q, "type", "Vibraphone"), "state: junk changes nothing");
@@ -298,6 +297,8 @@ static void *note(const char *type, int key, int vel, int frames, int release_at
     A->set_param(p, "b_noise", "0");
     A->set_param(p, "b_body", "0");
     A->set_param(p, "a_air", "0");
+    A->set_param(p, "d_noise", "0");
+    A->set_param(p, "v_air", "0");
     for (const char *e = extra; e && *e;) {           /* "key=value;key=value" */
         char k[32], v[32];
         int n = 0;

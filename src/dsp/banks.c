@@ -126,13 +126,16 @@ void banks_note_on(quilt_t *q, int note, int vel) {
         for (int d = 0; d < 9; d++) k->contact[d] = rnd(&k->rng) * 0.0012f;
         b->click += 1.0f;
     }
-    if (!k->on) { k->att = k->att_up = 0.0f; }
+    if (!k->on) { k->att = k->att_up = 0.0f; k->rel = 1.0f; }
     k->on = 1;
     k->held = 1;
     k->inst = inst;
     k->t = 0.0f;
-    k->rel = 1.0f;
+    /* Struck again while it fades, a key keeps its level (k->rel) and comes
+     * back up from where it is, not in one step: the pipes and strings rise
+     * in about 3 ms, the wheels across a block. */
     k->chiff = 1.0f;
+    k->chiff_up = 0.0f;
 }
 
 void banks_note_off(quilt_t *q, int note) {
@@ -301,6 +304,8 @@ static void wheels(quilt_t *q, int inst, float *mono, int frames) {
 
 /* ---- pipes and strings: keys reading shared generators ---- */
 
+#define RISE_K 0.0075f          /* back up in about 3 ms */
+
 static float midi_hz(int p) { return 440.0f * powf(2.0f, (float)(p - 69) / 12.0f); }
 
 /* The register a knob sets: zero is silent, full is full, a smooth taper between. */
@@ -326,7 +331,8 @@ static void pipes(quilt_t *q, int inst, float *mono, int frames) {
         for (int k = 1; k < 5; k++) h[r][k] *= powf(s, (float)k);
     const float speech = 0.015f * powf(27.0f, slot(q, inst, "k_swell", 0.4f)) * (0.7f + 0.6f * soft);
     const float ak = 1.0f - expf(-dt / (speech * 0.4f)), auk = 1.0f - expf(-dt / (speech * 0.15f));
-    const float ck = expf(-dt / 0.03f);
+    /* The chiff rises in 1.5 ms, so a pipe never speaks with a click. */
+    const float ck = expf(-dt / 0.03f), cuk = 1.0f - expf(-dt / 0.0015f);
     const float rel_k = expf(-6.91f * dt / release_t60(q, BK_PIPES));
 
     /* This block's keys and the pitches they need, worked out once. */
@@ -373,6 +379,8 @@ static void pipes(quilt_t *q, int inst, float *mono, int frames) {
             const int note = keys[i];
             k->att += (1.0f - k->att) * ak;
             k->att_up += (1.0f - k->att_up) * auk;
+            k->chiff_up += (1.0f - k->chiff_up) * cuk;
+            const float chiff = k->chiff * k->chiff_up;
             float y = 0.0f;
             for (int r = 0; r < 3; r++) {
                 const int p = note + 12 * r;
@@ -384,7 +392,7 @@ static void pipes(quilt_t *q, int inst, float *mono, int frames) {
                 if (has5[p]) up += h[r][4] * x * (5.0f + x2 * (16.0f * x2 - 20.0f));
                 /* PUFF: the pipe overblows for an instant (a stopped pipe to
                  * its twelfth, an open one to its octave). */
-                const float ob = (r == 0 ? s3 : s2) * k->chiff * ob_g;
+                const float ob = (r == 0 ? s3 : s2) * chiff * ob_g;
                 y += lv[r] * (k->att * h[r][0] * x + k->att_up * up + ob);
             }
             /* ... and a breath of noise rings in the pipe's mouth. */
@@ -393,10 +401,11 @@ static void pipes(quilt_t *q, int inst, float *mono, int frames) {
                 const float o = ra1[i] * k->bp[0] - ra2 * k->bp[1] + nz;
                 k->bp[1] = k->bp[0];
                 k->bp[0] = o;
-                y += o * k->chiff * nz_g;
+                y += o * chiff * nz_g;
             }
             k->chiff *= ck;
             if (!k->sus) k->rel *= rel_k;
+            else if (k->rel < 1.0f) k->rel = fminf(1.0f, k->rel + (1.0f - k->rel) * RISE_K + 1e-6f);
             mono[n] += y * k->rel;
         }
     }
@@ -466,6 +475,7 @@ static void strings(quilt_t *q, int inst, float *left, float *right, int frames)
                 y += lv[r] * (2.0f * ph - 1.0f - blep(ph, inc));
             }
             if (!k->sus) k->rel *= rel_k;
+            else if (k->rel < 1.0f) k->rel = fminf(1.0f, k->rel + (1.0f - k->rel) * RISE_K + 1e-6f);
             x += y * k->att * k->rel;
         }
         b->lp_z[0] += (x - b->lp_z[0]) * lk;

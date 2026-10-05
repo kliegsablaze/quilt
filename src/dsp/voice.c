@@ -23,9 +23,10 @@ static int named(int inst, const char *name) { return !strcmp(QUILT_INST[inst].n
 int quilt_sway_is_tremolo(int inst) {
     /* SWAY is the vibraphone fan's depth (modal.c), the organ's Leslie
      * (fx.c) and the vibrato of the string machine, the bowed strings and
-     * the winds (banks.c, waveguide.c, air.c), not a tremolo. */
+     * the winds and the choir (banks.c, waveguide.c, air.c, choir.c), not a
+     * tremolo. */
     return !named(inst, "Vibraphone") && !named(inst, "Tonewheel Organ") && !named(inst, "String Ensemble") &&
-           !bowed_supports(inst) && !air_sway_is_vibrato(inst);
+           !bowed_supports(inst) && !air_sway_is_vibrato(inst) && !choir_supports(inst);
 }
 
 int quilt_sway_is_pan(int inst) {
@@ -42,13 +43,13 @@ int quilt_speed_shown(int inst) {
 
 int quilt_built(int inst) {
     return modal_supports(inst) || fm_supports(inst) || waveguide_supports(inst) || bowed_supports(inst) ||
-           air_supports(inst) || banded_supports(inst) || banks_supports(inst);
+           air_supports(inst) || banded_supports(inst) || choir_supports(inst) || banks_supports(inst);
 }
 
 int quilt_modal_in_use(const quilt_t *q) {
     int n = 0;
     for (int i = 0; i < QUILT_VOICES; i++)
-        if (q->v[i].active) n += q->v[i].mv.n4 * 4;
+        if (q->v[i].active) n += q->v[i].osc;
     return n;
 }
 
@@ -75,7 +76,7 @@ static int quietest(const quilt_t *q, int except_note) {
     for (int i = 0; i < QUILT_VOICES; i++) {
         const voice_t *v = &q->v[i];
         if (!v->active || v->note == except_note) continue;
-        float l = v->mv.peak * (v->held ? 4.0f : 1.0f);   /* keep held notes longer */
+        float l = v->peak * (v->held ? 4.0f : 1.0f);   /* keep held notes longer */
         if (l < lo) { lo = l; best = i; }
     }
     return best;
@@ -84,8 +85,8 @@ static int quietest(const quilt_t *q, int except_note) {
 void quilt_note_on(quilt_t *q, int note, int vel) {
     if (banks_supports(q->type)) { banks_note_on(q, note, vel); return; }
     const int fm = fm_supports(q->type), wg = waveguide_supports(q->type), bow = bowed_supports(q->type);
-    const int air = air_supports(q->type), band = banded_supports(q->type);
-    if (!fm && !wg && !bow && !air && !band && !modal_supports(q->type)) return;
+    const int air = air_supports(q->type), band = banded_supports(q->type), ch = choir_supports(q->type);
+    if (!fm && !wg && !bow && !air && !band && !ch && !modal_supports(q->type)) return;
     int slot = -1;
     for (int i = 0; i < QUILT_VOICES && slot < 0; i++)
         if (q->v[i].active && q->v[i].note == note) slot = i;
@@ -98,7 +99,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     }
 
     /* Only modal notes draw on the oscillator budget. */
-    const int modal = !fm && !wg && !bow && !air && !band;
+    const int modal = !fm && !wg && !bow && !air && !band && !ch;
     int need = modal ? modal_osc_needed(q, q->type, note) : 0;
     while (quilt_modal_in_use(q) + need > MODAL_BUDGET) {
         int victim = quietest(q, note);
@@ -122,6 +123,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     else if (bow) bowed_note_on(q, v);
     else if (air) air_note_on(q, v);
     else if (band) banded_note_on(q, v);
+    else if (ch) choir_note_on(q, v);
     else modal_note_on(q, v, granted);
 }
 
@@ -172,6 +174,7 @@ void quilt_render(quilt_t *q, float *left, float *right, int frames) {
         else if (bowed_supports(v->inst)) bowed_render(q, v, bl, br, frames);
         else if (air_supports(v->inst)) air_render(q, v, left, right, frames);
         else if (banded_supports(v->inst)) banded_render(q, v, left, right, frames);
+        else if (choir_supports(v->inst)) choir_render(q, v, left, right, frames);
         else modal_render(q, v, left, right, board, frames);
     }
     waveguide_bank_render(q, bridge, left, right, frames);
