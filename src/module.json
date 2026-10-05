@@ -2,7 +2,7 @@
   "id": "quilt",
   "name": "Quilt",
   "abbrev": "QLT",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "dsp": "dsp.so",
   "api_version": 2,
   "component_type": "sound_generator",

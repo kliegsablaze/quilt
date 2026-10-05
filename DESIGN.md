@@ -1721,9 +1721,9 @@ ring: the whole block must still fit. It is worst on the Una Corda Grand, at
    Choir were then made cheaper (*Will it fit*). 1,177 checks pass.
    ~~The 114 factory presets~~ (*Picking an instrument*) ~~and `help.json`~~,
    **done** 2026-10-05; the mod wheel now spins the Leslie too, as the table in
-   *Playing it with the Move* always said. 2,027 checks pass. Next: the
-   catalog entry. **Release 1.0: all thirty-eight** waits on the user's
-   go-ahead.
+   *Playing it with the Move* always said. 2,027 checks pass. **Release 1.0: all
+   thirty-eight**, cut on the user's go-ahead 2026-10-05, with the catalog
+   entry (see *Releasing*).
 9. Device revision: cut the pages after the first look.
 
 Unbuilt, in rough order of what they would add:
@@ -1785,3 +1785,46 @@ module black-box through the v2 API, as `chain_host` would.
 - **Cost.** Block time on the Mac in the test, then on the Move with 16 notes on
   each instrument. This is recorded in this document.
 - **Listening.** You play it.
+
+## Releasing
+
+Same two tracks as the rest of the fleet: `scripts/install.sh` puts a dev
+build on your Move and touches nothing else; `scripts/release.sh` is the only
+thing that reaches anyone else.
+
+`release.sh` refuses a dirty tree, an existing tag and a private repo, runs
+the suite, pushes `main`, then tags `v<version>` from `src/module.json`.
+The tag starts `.github/workflows/release.yml`, which checks the tag matches
+the version, runs the suite again (against a fresh checkout of upstream
+Schwung, for the page planner), builds in `scripts/Dockerfile`, attaches
+`quilt-module.tar.gz` to a GitHub release and commits `release.json` to
+`main`. Schwung Manager reads that file.
+
+**Once only**, the module needs an entry in Schwung's `module-catalog.json`
+(a pull request to `charlesvestal/schwung`):
+
+```json
+{
+  "id": "quilt",
+  "name": "Quilt",
+  "description": "Thirty-eight soft instruments, from felt pianos and vibraphones to bowed cello, breathy flute and choir, all synthesised and played with pad pressure",
+  "author": "kliegsablaze",
+  "component_type": "sound_generator",
+  "subcategory": "physical-modeling",
+  "tags": [
+    "polyphonic"
+  ],
+  "github_repo": "kliegsablaze/quilt",
+  "default_branch": "main",
+  "asset_name": "quilt-module.tar.gz",
+  "min_host_version": "1.6.3"
+}
+```
+
+- **`min_host_version` 1.6.3:** see *Host check*; every feature Quilt uses is
+  in 1.6.3, and the device was built and tested on it.
+- **`subcategory` physical-modeling:** five of the six engines are physical
+  models; the sixth (FM and formant) is a small part.
+- **The repo must be public:** Schwung Manager downloads anonymously. All
+  synthesis, no samples, and no code from OpenWurli or STK, so nothing stands
+  in the way.

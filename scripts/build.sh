@@ -21,3 +21,8 @@ fi
 # help.json is what puts "Module Help" one jog from the controls.
 cp src/module.json src/help.json dist/quilt/
 echo "Built dist/quilt/"
+
+cd dist
+tar -czf quilt-module.tar.gz quilt/
+cd ..
+echo "Tarball: dist/quilt-module.tar.gz"
