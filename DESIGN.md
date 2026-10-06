@@ -1545,12 +1545,15 @@ knows. Every CHAR key has its own picture. The drawbars are drawn as a
 Hammond's: the subs hatched like its brown bars, the octaves hollow like its
 white ones, the other harmonics with a solid centre like its black ones.
 
-Three rules make them one set:
+Three rules make them one set, and keep a page quiet:
 
-- **The seam.** A light running stitch along the foot of every picture, sewn
-  closer up to the value, with a one-pixel needle where it stops. TONE's sews
-  out from the middle. The seam shows any knob's value the same way, so the
-  picture above it is free to explain.
+- **Small and centred.** Each picture is drawn in a 32×12 design space and
+  scaled to 80% about the cell's centre before it becomes pixels, so lines stay
+  one pixel and circles stay round. It sits in the middle of its cell with room
+  around it, near the built-in dial's footprint. 70% was tried and merged the
+  fine detail (drawbars, bows, the TYPE icons). A stitched seam along every
+  cell's foot showed the value at first, and was removed for being busy: the
+  picture shows the value, and holding the knob shows the number.
 - **One pen.** Everything is a one-pixel line. What rings is a plain line, what
   plays it an outline, and sound is dotted. Solid fills read as blocks at this
   size, and were thinned out on the first look.
@@ -1565,16 +1568,16 @@ Three rules make them one set:
 No card pops up while a knob is held. That was offered and declined.
 
 A still picture is drawn once into a bitmap and replayed as horizontal runs,
-so a page that is not moving costs at most 86 host calls a cell and no maths.
+so a page that is not moving costs at most 62 host calls a cell and no maths.
 Only the cell being turned is redrawn each frame. Measured in Node with the JIT
 off, which is closer to QuickJS: a worst-case still page takes 0.19 ms to draw,
 and 2.3 ms with all eight cells moving at once.
 
 `tests/widgets.test.mjs` loads the file the way the host does and draws every
 key of every instrument through the host's own frame and viz resolver. It
-checks that each cell resolves to the picture and draws inside its frame, that
-an unanswered value draws only the seam, that a still picture replays
-exactly, and that the Leslie holds still until touched or turned.
+checks that each cell resolves to the picture and draws inside its frame,
+clear of its edges and near its middle, that an unanswered value draws
+nothing, that a still picture replays exactly, and that the Leslie holds still until touched or turned.
 
 ## Will it fit
 

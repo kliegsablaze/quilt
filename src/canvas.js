@@ -3,11 +3,11 @@
  * for any module whose chain_params name a `custom:` viz kind, and calls
  * drawCell for each cell with a frame whose (0,0) is the cell.
  *
- * One rule set for every cell, so a page reads as one hand:
+ * One rule set for every cell, so a page reads as one hand and stays quiet:
  *
- *   THE SEAM. Every picture stands on the same light stitch along its foot.
- *     Turning the knob sews it closer up to the value, and a one-pixel needle
- *     stands where the sewing stopped.
+ *   SMALL AND CENTRED. Each picture is drawn in a 32x12 design space and
+ *     scaled to 80% about the cell's centre before it becomes pixels, so it
+ *     sits in the middle of its cell with room around it.
  *   ONE PEN. Everything is a one-pixel line. What rings (strings, bars,
  *     reeds, air) is a plain line, what plays it (hammer, mallet, finger, bow,
  *     breath) is an outline, and sound itself is dotted.
@@ -17,10 +17,10 @@
  *     hold still otherwise. Every value eases to a new one in 140 ms.
  *
  * A still picture is drawn once and replayed; see pen().
- * The frame is 32x15 (a Movy cell): picture rows 0..11, seam rows 13..14.
+ * The frame is a 32x15 Movy cell.
  */
 (function () {
-const W = 32, PIC = 11, SEAM_Y = 14;
+const W = 32, PIC = 11;
 /* How long a time control keeps moving after its knob was last turned. */
 const AWAKE_MS = 1500;
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -78,26 +78,6 @@ function dotted(c, x0, x1, f, every) { for (let x = x0; x <= x1; x += every || 2
 
 function spark(c, x, y) { px(c, x, y); px(c, x - 1, y - 1); px(c, x + 1, y - 1); px(c, x - 1, y + 1); px(c, x + 1, y + 1); }
 
-/* THE SEAM: one row along the foot. A sparse running stitch shows the whole
- * range; the sewn part is a close stitch up to the value, and the needle is a
- * single pixel standing above where the sewing stopped. */
-function seam(c, v) {
-    const x0 = 2, x1 = W - 3, n = x1 - x0;
-    const end = x0 + Math.round(clamp01(v) * n);
-    for (let x = x0; x <= x1; x++)
-        if (x <= end ? (x - x0) % 3 !== 2 : (x - x0) % 4 === 0) px(c, x, SEAM_Y);
-    px(c, end, SEAM_Y); px(c, end, SEAM_Y - 1);
-}
-/* A bipolar seam sews outward from the middle, which is marked below. */
-function seam2(c, v) {
-    const mid = 16, x0 = 2, x1 = W - 3;
-    const end = Math.round(mid + (clamp01(v) - 0.5) * 2 * (x1 - mid));
-    const lo = Math.min(mid, end), hi = Math.max(mid, end);
-    for (let x = x0; x <= x1; x++)
-        if (x >= lo && x <= hi ? (x - lo) % 3 !== 2 : (x - x0) % 4 === 0) px(c, x, SEAM_Y);
-    px(c, mid, SEAM_Y); px(c, end, SEAM_Y); px(c, end, SEAM_Y - 1);
-}
-
 /* ------------------------------------------------------------- motifs -- */
 /* The things that play. Each is the ONLY solid object in its picture. */
 function hammer(c, x, y, soft) {          /* wood core on a shank, felt under it */
@@ -118,8 +98,8 @@ function mallet(c, x, y, soft) {          /* ball resting on row y */
            if (soft > 0.8) { px(c, x - r - 1, y - r); px(c, x + r + 1, y - r - 1); px(c, x, y - 2 * r - 1); } }
 }
 function bowStroke(c, y, x0, x1) {        /* stick above, hair below, frog at the heel */
-    hline(c, x0 + 2, x1, y); hline(c, x0 + 2, x1 - 1, y + 2); px(c, x1, y + 1);
-    vline(c, x0 + 1, y, y + 2); px(c, x0, y + 1);
+    hline(c, x0 + 2, x1, y); hline(c, x0 + 2, x1 - 1, y + 3); vline(c, x1, y + 1, y + 2);
+    vline(c, x0 + 1, y, y + 3);
 }
 /* A string between two bridges, vibrating with amplitude a in mode shape. */
 function string(c, y, a, ph, x0, x1, node) {
@@ -218,7 +198,7 @@ const ICON = {
     grand(c, x) { c.line(x, 8, x + 4, 1, 1); hline(c, x + 4, x + 12, 1); c.drawArc(x + 15, 6, 5, 300, 160, 1); hline(c, x, x + 20, 8);
         for (let i = 0; i < 10; i++) px(c, x + 1 + i * 2, 9); hline(c, x, x + 20, 10); c.line(x + 4, 1, x + 10, 6, 1); },
     tine(c, x) { for (let i = 0; i < 4; i++) { hline(c, x + 2, x + 13 + i * 2, 1 + i * 3); vline(c, x + 14 + i * 2, i * 3, i * 3 + 2); } vline(c, x + 1, 0, 10); },
-    organ(c, x) { [5, 3, 6, 2, 4].forEach((n, i) => { const xx = x + 2 + i * 4; vline(c, xx, 0, n); hline(c, xx - 1, xx + 1, n); });
+    organ(c, x) { [5, 3, 6, 2].forEach((n, i) => { const xx = x + 3 + i * 5; vline(c, xx, 0, n); hline(c, xx - 1, xx + 1, n); });
         hline(c, x, x + 20, 8); for (let i = 2; i < 20; i += 3) px(c, x + i, 9); hline(c, x, x + 20, 11); vline(c, x, 8, 11); vline(c, x + 20, 8, 11); },
     pipes(c, x) { [10, 8, 6, 5, 6, 8, 10].forEach((n, i) => { const xx = x + 1 + i * 3; vline(c, xx, 10 - n, 10); vline(c, xx + 2, 10 - n, 10); px(c, xx + 1, 10 - n); px(c, xx + 1, 8); }); },
     bars(c, x) { [10, 9, 8, 7, 6, 5, 4].forEach((n, i) => { const xx = x + i * 3; vline(c, xx, 10 - n, 10); }); },
@@ -255,7 +235,7 @@ const TYPE_ICON = {
 /* ------------------------------------------------------------ drawers -- */
 /* Each takes (c, v, s): v is the eased value in 0..1 and s carries the
  * instrument, the time and the raw value. Each draws its picture only; the
- * seam is drawn for it. */
+ * pen scales it into the cell. */
 const D = {};
 
 /* MAIN ------------------------------------------------------------------ */
@@ -369,7 +349,7 @@ D.tone = (c, v) => {
 
 D.space = (c, v, s) => {
     /* A sound in a room: the more space, the more echoes roll outward. */
-    vline(c, 3, 5, 7);
+    vline(c, 3, 5, 7); for (let y = 0; y <= 11; y += 3) px(c, 28, y);      /* the source, and the far wall */
     const n = Math.ceil(v * 6 - 0.05), ph = phase(s.key, 0.6, s.now), o = offset(c, 0);
     for (let i = 0; i < n; i++) {
         const r = Math.round(3 + (i + ph) * 4);
@@ -488,9 +468,9 @@ C.pizzicato = (c, v) => {                     /* viola to cello: the wave grows 
 };
 const veil = (c, v) => {                      /* the bow moves from the bridge up over the fingerboard */
     hline(c, 3, 28, 6); vline(c, 28, 4, 8);
-    for (let x = 3; x <= 11; x++) { px(c, x, 4); px(c, x, 8); if (x % 2) px(c, x, 7); }
+    hline(c, 3, 11, 3); hline(c, 3, 11, 9); vline(c, 11, 3, 9);
     const x = 23 - Math.round(v * 13);
-    vline(c, x, 0, 11); vline(c, x + 2, 1, 11); px(c, x + 1, 0);
+    vline(c, x, 0, 11); vline(c, x + 3, 1, 11); hline(c, x, x + 3, 0);
 };
 C.solo_cello = C.solo_violin = veil;
 C.string_section = (c, v) => {                /* the players spread across the room */
@@ -597,14 +577,14 @@ D.slow = leslie(0.5); D.fast = leslie(4);
 const BAR_KIND = { o_16: "sub", o_513: "sub", o_8: "white", o_4: "white", o_2: "white", o_1: "white", o_223: "black", o_135: "black", o_113: "black" };
 D.drawbar = (c, v, s) => {
     const n = Math.round(clamp01(v) * 8), kind = BAR_KIND[s.param] || "white";
-    const end = Math.round(1 + n * 1.25), x = 14;
-    vline(c, x, 0, end); vline(c, x + 4, 0, end);
+    const end = Math.round(1 + n * 1.2), x = 13;
+    vline(c, x, 0, end); vline(c, x + 6, 0, end);
     for (let y = 0; y <= end; y++) {
-        if (kind === "black") px(c, x + 2, y);
-        else if (kind === "sub" && y % 2 === 0) px(c, x + 2, y);
+        if (kind === "black") px(c, x + 3, y);
+        else if (kind === "sub" && y % 3 === 0) px(c, x + 3, y);
     }
-    hline(c, x - 1, x + 5, end + 1); px(c, x - 1, end + 2); px(c, x + 5, end + 2);
-    for (let i = 0; i <= 8; i += 2) px(c, 10, Math.round(1 + i * 1.25));
+    hline(c, x - 1, x + 7, end + 1);
+    for (let i = 0; i <= 8; i += 4) px(c, 9, Math.round(1 + i * 1.2));
 };
 /* pipe organ / ensemble */
 D.swell = (c, v, s) => {                       /* how slowly the note blooms; a spark climbs it */
@@ -725,7 +705,7 @@ function drawCell(ctx, { values, group, nowMs, touched }) {
     const sid = (group.tile != null ? group.tile + "|" : "") + key;
     const raw = values[key];
     const v0 = norm(key, raw);
-    if (!Number.isFinite(v0)) { const p = pen(ctx.width, ctx.height); seam(p, 0); replay(ctx, p.runs()); return; }   /* no answer yet: an empty seam, no picture */
+    if (!Number.isFinite(v0)) return;   /* no answer yet: no picture of a made-up value */
     const now = typeof nowMs === "number" ? nowMs : 0;
     const type = typeName(values.type);
     const role = roleOf(key);
@@ -748,9 +728,8 @@ function drawCell(ctx, { values, group, nowMs, touched }) {
     const sig = String(raw) + "|" + type + "|" + s.speed + "|" + ctx.width + "x" + ctx.height;
     const hit = stills.get(sid);
     if (!moving && hit && hit.sig === sig) { replay(ctx, hit.runs); return; }
-    const p = pen(ctx.width, ctx.height);
+    const p = pen(ctx.width, ctx.height, SCALE);
     fn(p, v, s);
-    if (key === "tone") seam2(p, v); else seam(p, v);
     const runs = p.runs();
     replay(ctx, runs);
     if (moving) stills.delete(sid); else stills.set(sid, { sig, runs });
@@ -760,20 +739,27 @@ function drawCell(ctx, { values, group, nowMs, touched }) {
  * once, overlapping strokes cost nothing, and the result goes to the host as a
  * few horizontal runs rather than a call per pixel. */
 const stills = new Map();
-function pen(w, h) {
+/* Pictures are drawn in a 32x12 design space and scaled down by SCALE about
+ * its centre BEFORE they become pixels: a line stays one pixel, a circle stays
+ * round, and the picture sits small in the middle of its cell. */
+const SCALE = 0.8;
+function pen(w, h, k) {
     const bm = new Uint8Array(w * h);
+    const cx = w / 2 - 0.5, cy = h / 2 - 0.5;
+    const tx = (x) => Math.round(cx + (x - 15.5) * k), ty = (y) => Math.round(cy + (y - 5.5) * k);
+    const plot = (x, y) => { if (x >= 0 && y >= 0 && x < w && y < h) bm[y * w + x] = 1; };
+    const raw = { fillRect(x, y, rw, rh) { for (let j = y; j < y + rh; j++) for (let i = x; i < x + rw; i++) plot(i, j); } };
     const p = {
-        width: w, height: h,
+        width: W, height: PIC + 1,
         fillRect(x, y, rw, rh) {
-            x = Math.round(x); y = Math.round(y);
-            const x0 = Math.max(0, x), y0 = Math.max(0, y), x1 = Math.min(w, x + Math.round(rw)), y1 = Math.min(h, y + Math.round(rh));
-            for (let j = y0; j < y1; j++) bm.fill(1, j * w + x0, j * w + Math.max(x0, x1));
+            const x0 = tx(x), x1 = tx(x + Math.max(1, rw) - 1), y0 = ty(y), y1 = ty(y + Math.max(1, rh) - 1);
+            for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) plot(i, j);
         },
-        line(x0, y0, x1, y1) { lineVia(p, Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)); },
-        drawArc(x, y, r, a, sw) { arcVia(p, Math.round(x), Math.round(y), Math.round(r), a, sw); },
-        drawCircle(x, y, r) { arcVia(p, Math.round(x), Math.round(y), Math.round(r), 0, 360); },
-        fillCircle(x, y, r) { x = Math.round(x); y = Math.round(y); r = Math.round(r);
-            for (let dy = -r; dy <= r; dy++) { const hf = Math.floor(Math.sqrt(r * r - dy * dy)); p.fillRect(x - hf, y + dy, 2 * hf + 1, 1); } },
+        line(x0, y0, x1, y1) { lineVia(raw, tx(x0), ty(y0), tx(x1), ty(y1)); },
+        drawArc(x, y, r, a, sw) { arcVia(raw, tx(x), ty(y), Math.max(1, Math.round(r * k)), a, sw); },
+        drawCircle(x, y, r) { arcVia(raw, tx(x), ty(y), Math.max(1, Math.round(r * k)), 0, 360); },
+        fillCircle(x, y, r) { const X = tx(x), Y = ty(y), R = Math.max(1, Math.round(r * k));
+            for (let dy = -R; dy <= R; dy++) { const hf = Math.floor(Math.sqrt(R * R - dy * dy)); raw.fillRect(X - hf, Y + dy, 2 * hf + 1, 1); } },
         runs() {
             const out = [];
             for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {

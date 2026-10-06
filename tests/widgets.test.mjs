@@ -79,16 +79,26 @@ for (const type of byKey.type.options) {
             let r;
             try { r = draw(k, vals, 1000); } catch (e) { check(false, `${type}: ${k}@${u} throws ${e}`); continue; }
             check(r.clipped === 0, `${type}: ${k}@${u} draws outside its frame (${r.clipped})`);
-            check(r.lit >= 8, `${type}: ${k}@${u} draws a picture (${r.lit} px)`);
+            check(r.lit >= 5, `${type}: ${k}@${u} draws a picture (${r.lit} px)`);
             if (r.calls > worstCalls) { worstCalls = r.calls; worstKey = `${type} ${k}@${u}`; }
         }
     }
 }
 
-// No answer yet: the seam alone, never a picture of a made-up value.
+// No answer yet: nothing at all, never a picture of a made-up value.
 ov._reset();
 const empty = draw("soft", { type: "Felt Upright" }, 1000);
-check(empty.lit > 0 && empty.lit < 16, `an unanswered value draws only the seam (${empty.lit} px)`);
+check(empty.lit === 0, `an unanswered value draws nothing (${empty.lit} px)`);
+
+// Small and centred: every picture keeps a clear margin inside its cell.
+for (const k of ["c_handpan", "space", "volume", "o_16", "type", "sway"]) {
+    ov._reset();
+    const r = draw(k, { type: k === "o_16" ? "Tonewheel Organ" : "Handpan", speed: 0.4, [k]: value(k, 1) }, 1000);
+    let x0 = 99, x1 = -1;
+    for (let y = 0; y < 15; y++) for (let x = 0; x < 32; x++) if (r.px[y * 128 + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+    check(x0 >= 3 && x1 <= 28, `${k} stays clear of its cell's edges (${x0}..${x1})`);
+    check(Math.abs((x0 + x1) / 2 - 15.5) <= 4, `${k} sits near the middle of its cell (${x0}..${x1})`);
+}
 
 // A still picture replays exactly what it drew.
 ov._reset();
