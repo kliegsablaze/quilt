@@ -17,7 +17,7 @@ else
     docker run --rm -v "$PWD:/build" -w /build "$IMAGE" sh -c "$CC_CMD"
 fi
 
-scp -q build/bench-aarch64 "$HOST:/tmp/quilt-bench"
+scp -q build/bench-aarch64 "$HOST:/data/UserData/quilt-bench"
 args=""
 for a in "$@"; do args="$args '$a'"; done
-ssh "$HOST" "/tmp/quilt-bench$args; rm -f /tmp/quilt-bench"
+ssh "$HOST" "/data/UserData/quilt-bench$args; rm -f /data/UserData/quilt-bench"

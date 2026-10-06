@@ -358,8 +358,10 @@ and kalimba.
 - **`BUZZ`** (Kalimba) adds the mbira's buzzers, the bottle caps or rings that
   rattle against the box when a tine swings hard. A band of noise, about
   4–10 kHz, rides the note's own swing (|y|), so the rattle chatters with the
-  tine and dies with it. At zero it is a music box. By default there is a
-  touch, about −31 dB against the fundamental; full up it is about −20 dB.
+  tine and dies with it. At zero it is a music box. **The default has none**:
+  even a touch was too much (the user, 2026-10-05). The knob turns on a
+  square, as the noise knobs do, and full up is about −36 dB against the
+  fundamental (it was −20 dB, and −31 dB by default).
 - **Coupled strings.** These follow Weinreich, in JOS's coupled-strings form. Two
   or three detuned copies of each mode, with a small bridge coupling, give the
   **double decay**: a fast in-phase fall, then a slow anti-phase aftersound. Una
@@ -989,8 +991,9 @@ the Vibraphone.
 
 **Picking an instrument.** `TYPE` steps through the instruments built so far, in
 family order: today the thirty-seven named at the top of this document. The jog
-wheel browses **presets** on the Main page: **114, three per instrument**, in
-`TYPE`'s order (`presets.c`). The first of each is the instrument's default sound,
+wheel browses **presets** on the Main page: **114, three per instrument**, the
+instruments **in alphabetical order** (`presets.c`), so the list is easy to find
+your way along (the user, 2026-10-05); `TYPE` keeps its families. The first of each is the instrument's default sound,
 named after it, and is what turning `TYPE` loads. The other two each name a
 familiar way of playing it (*Vibes Motor Off*, *Chimes Muted*, *Organ Jazz Perc*,
 *Cello Auto Bow*) and change only what that needs, as `key=value` pairs over the
@@ -1004,15 +1007,16 @@ voicing. For the bowed, rubbed and blown instruments one of the two is usually a
   the width it lost the variation, the part you are looking for.)
 - **Every preset plays at the defaults' loudness**, −26.5 LUFS on the test
   phrase (all 114 within ±0.3 LU). A variation carries a **trim**, its own level
-  in dB with no knob, set by measurement: from −6.9 dB for the mallet rolls,
-  which strike many times, to +6.8 dB for *Violin Sul Tasto*. It is applied with
-  `VOL`, glides about 20 ms, is saved in `state`, and turning `TYPE` sets it back
-  to 0. (Rejected: re-voicing each variation until it matched, which undoes the
+  in dB with no knob, set by measurement, and so does each default sound (its
+  voicing's `trim`), since *Space* came down to 10 % for all of them. It is
+  applied with `VOL`, glides about 20 ms, is saved in `state`, and turning `TYPE`
+  sets it to that default sound's own. (Rejected: re-voicing each variation until it matched, which undoes the
   change that makes it a variation; and leaving them unmatched, which makes
   browsing a hunt for `VOL`.)
 - **Older saved sounds.** Version 1 of `state` had one preset per instrument, so
   its `preset` was a `TYPE` index; it now maps to that instrument's first preset,
-  and a blob without a trim has none.
+  and a blob without a trim has none. Version 2 had the presets in `TYPE`'s
+  order; its index maps to the same preset in the alphabetical list.
 
 ### Every instrument starts beautiful
 
@@ -1029,50 +1033,54 @@ Upright's small dark room under the vibraphone, say. A saved sound is still
 recalled exactly, because `state` sets every value directly and never goes
 through `TYPE` (see *Implementation notes*).
 
+**Every default sound has `SPACE` at 10 %** (the user, 2026-10-05), so the
+instrument is heard first and the room is a choice. The presets that are about a
+room (*Grand Far Hall*, *Chimes Cathedral*) keep theirs.
+
 Each default sound, the *voicing*, is one line in `instruments.c`: Main from the
 instrument's row, then `key=value` pairs for `CHAR`, its own page and any Effects
 key. Any Effects key not named takes its shared default.
 
 | Instrument | The idea | Main | Own page | Room |
 |---|---|---|---|---|
-| Felt Upright | Close and intimate (Frahm, *Felt*): a thick strip, the action loud and near | SOFT 55, FELT 35, DECAY 50, TONE 55, SPACE 18 | NOISE 60, SPLIT 30, BODY 60, DAMP 30 | Small and warm: SIZE 35 (1.7 s), DARK 55, DELAY 8, DRIVE 10 |
-| Una Corda Grand | Further off, on two strings, a touch darker, in a hall | SOFT 50, HUSH 45, DECAY 65, TONE 45, SPACE 28 | SPOT 25, SPLIT 25, BODY 55, NOISE 21, DAMP 30 | A hall: SIZE 65 (3.1 s), DARK 45, DELAY 30 |
-| Vibraphone | A slow motor, released bars left to ring a little | SOFT 50, MOTOR 22 (2.9 Hz), DECAY 60, SWAY 45, SPACE 30 | BODY 70, SPLIT 5, NOISE 15, DAMP 15 | Shimmering: SIZE 60 (2.7 s), DARK 35, DELAY 25 |
-| Marimba | Rosewood and yarn, nearly dry (Reich) | SOFT 50, ROLL 0, DECAY 58, TONE 52, SPACE 21 | BODY 75, SPLIT 5, NOISE 32, DAMP 0 | SIZE 45 (2.1 s), DARK 50, DELAY 15 |
-| Celesta | Felt hammers and a little bell (*Sugar Plum Fairy*) | SOFT 55, BELL 40, DECAY 50, SPACE 30 | BODY 60, SPLIT 5, NOISE 30, DAMP 30 | SIZE 55 (2.5 s), DARK 40, DELAY 20 |
-| Toy Piano | Slightly out of tune and clangy (Cage) | SOFT 45, BELL 50, DECAY 50, SPACE 22 | BODY 60, SPLIT 15, NOISE 40, DAMP 0 | Small: SIZE 30 (1.5 s), DARK 50, DELAY 5 |
-| Xylophone | Yarn mallets on rosewood | SOFT 60, ROLL 0, DECAY 55, SPACE 22 | BODY 70, SPLIT 5, NOISE 30, DAMP 0 | SIZE 45 (2.2 s), DARK 50, DELAY 15 |
-| Glockenspiel | Soft-wrapped mallets, long-ringing steel | SOFT 70, BELL 35, DECAY 50, TONE 45, SPACE 28 | BODY 30, SPLIT 5, NOISE 15, DAMP 0 | SIZE 60 (2.3 s), DARK 45, DELAY 25 |
-| Kalimba / Music Box | A thumb piano with a touch of its buzzers | SOFT 60, BUZZ 30, DECAY 55, SPACE 25 | BODY 70, SPLIT 10, NOISE 30, DAMP 0 | SIZE 40 (1.8 s), DARK 50, DELAY 10 |
-| Electric Grand | A CP-70 in a ballad | SOFT 50, TWANG 35, DECAY 50, SWAY 20, SPACE 20 | BODY 50, SPLIT 20, NOISE 30, DAMP 30 | SIZE 45 (2.0 s), DARK 50, DELAY 12, SPEED 25 (a slow auto-pan) |
-| Tine Piano | A suitcase tine piano, voiced a little toward bark | SOFT 60, BARK 40, DECAY 55, SWAY 30, SPACE 20 | BODY 60, SPLIT 10, NOISE 25, DAMP 30 | SIZE 45 (2.0 s), DARK 50, DELAY 12, SPEED 30 (the slow stereo vibrato) |
-| Tonewheel Organ | *A Whiter Shade of Pale*: flutes `00 8800 000`, the Leslie slow | SOFT 50, LUSH 60, DECAY 30, SWAY 0, SPACE 20 | CLICK 35, LEAK 25, SLOW 30, FAST 60 | SIZE 40 (1.9 s), DARK 50, DELAY 10, DRIVE 20 (the preamp a little warm) |
-| Flute Organ | A chamber organ in a stone church: stopped 8′, open 4′ | SOFT 60, PUFF 45, DECAY 30, SWAY 10, SPACE 35 | EDGE 25, SWELL 35, 8′ 80, 4′ 50, 2′ 0 | SIZE 70 (3.2 s), DARK 45, DELAY 25, SPEED 55 (a 4.6 Hz tremulant) |
-| Glass E.Piano | An FM electric piano with its chorus | SOFT 60, GLASS 35, DECAY 55, SWAY 20, SPACE 30 | TUNE 50 (the bell pair on 3 : 1), TINE 45, SPLIT 25 | SIZE 50 (2.2 s), DARK 40, DELAY 15, SPEED 30 |
-| String Ensemble | *Oxygène*: viola and violin registers, a slow swell | SOFT 60, LUSH 70, DECAY 50, SWAY 0, SPACE 35 | EDGE 30, SWELL 45, 8′ 80, 4′ 60, 2′ 0 | SIZE 65 (3.0 s), DARK 45, DELAY 20 |
-| Reed Piano | A reed piano turned down in a small room | SOFT 60, BITE 45, DECAY 50, SWAY 25, SPACE 20 | BODY 50, SPLIT 8, NOISE 25, DAMP 30 | SIZE 35 (1.7 s), DARK 55, DELAY 8, SPEED 45 (its own tremolo), DRIVE 15 (the amplifier just warm) |
-| Tubular Bells | Chimes in a church, the pedal half down | SOFT 50, MUTE 20, DECAY 55, SPACE 32 | BODY 15, SPLIT 10, NOISE 25, DAMP 10 | SIZE 70 (3.2 s), DARK 45, DELAY 30 |
-| Handbells | The tierce half in, the bells beating gently | SOFT 60, MINOR 50, DECAY 55, SPACE 32 | BODY 30, SPLIT 15, NOISE 20, DAMP 0 | SIZE 65 (3.0 s), DARK 40, DELAY 25 |
-| Handpan | Fingertips, the shell's air under the low notes | SOFT 65, RING 55, DECAY 55, SPACE 30 | BODY 60, SPLIT 15, NOISE 30, DAMP 0 | SIZE 60 (2.7 s), DARK 45, DELAY 20 |
-| Tongue Drum | Rubber mallets on a wooden box | SOFT 60, RING 50, DECAY 50, SPACE 25 | BODY 65, SPLIT 10, NOISE 30, DAMP 0 | SIZE 45 (2.1 s), DARK 50, DELAY 12 |
-| Hammered Dulcimer | Courses a little apart, struck near the bridge, blooming | SOFT 60, BLOOM 55, DECAY 55, SPACE 25 | SPOT 20, SPLIT 35, BODY 80, NOISE 30, DAMP 0 | SIZE 50 (2.2 s), DARK 45, DELAY 15 |
-| Clavichord | In a small room: the tangent toward the end, stiff brass, the *Bebung* half in | SOFT 50, BEND 50, DECAY 40, SPACE 15 | SPOT 25, BODY 50, EDGE 60, NOISE 35, DAMP 50, STIFF 50 | Small: SIZE 30 (1.5 s), DARK 50, DELAY 5 |
-| Harp | A concert harp in a hall, its lower strings answering | SOFT 60, BLOOM 40, DECAY 70, SPACE 35 | SPOT 35, BODY 60, EDGE 45, NOISE 20, DAMP 5, STIFF 20 | A hall: SIZE 65 (3.1 s), DARK 45, DELAY 25 |
-| Nylon Guitar | Fingerstyle near the soundhole, the open strings ringing a little | SOFT 60, BLOOM 35, DECAY 50, SPACE 20 | SPOT 25, BODY 65, EDGE 40, NOISE 30, DAMP 20, STIFF 25 | SIZE 45 (2.1 s), DARK 50, DELAY 12 |
-| Pizzicato | Cellos and violas plucked with the pad of the finger, nearer the cello | SOFT 70, DEEP 60, DECAY 50, SPACE 30 | SPOT 45, BODY 70, EDGE 30, NOISE 35, DAMP 30, STIFF 15 | SIZE 60 (2.7 s), DARK 45, DELAY 20 |
-| Solo Cello | Sul tasto, a light bow, a slow vibrato, in a warm room | SOFT 60, VEIL 60, DECAY 40, SWAY 30, SPACE 30 | BODY 60, EDGE 40, PRESS Pad, SWELL 20, NOISE 25, BITE 30 | SIZE 50 (2.2 s), DARK 50, DELAY 15, SPEED 65 (a 5.4 Hz vibrato) |
-| Solo Violin | *Flautando*: fast and light over the fingerboard | SOFT 60, VEIL 60, DECAY 40, SWAY 30, SPACE 30 | BODY 60, EDGE 45, PRESS Pad, SWELL 30, NOISE 25, BITE 25 | SIZE 55 (2.5 s), DARK 45, DELAY 18, SPEED 68 |
-| String Section | A section in a hall, the players a little apart | SOFT 60, WIDTH 50, DECAY 50, SWAY 20, SPACE 40 | BODY 60, EDGE 40, PRESS Pad, SWELL 30, NOISE 20, BITE 20 | A hall: SIZE 70 (3.2 s), DARK 45, DELAY 25, SPEED 62 |
-| Flute | A flute in a warm hall, the lip a little over the hole | SOFT 60, COVER 30, DECAY 30, SWAY 25, SPACE 30 | ONSET 30, EDGE 45, PRESS Pad, SWELL 20, AIR 30 | SIZE 60 (2.7 s), DARK 45, DELAY 20, SPEED 65 |
-| Pan Flute | Stopped cane pipes with their puff | SOFT 60, PUFF 50, DECAY 30, SWAY 15, SPACE 35 | ONSET 25, EDGE 40, PRESS Pad, SWELL 20, AIR 25 | SIZE 65 (3.0 s), DARK 45, DELAY 25, SPEED 55 |
-| Ocarina | A clay vessel, nearly a pure tone | SOFT 60, PURE 50, DECAY 30, SWAY 15, SPACE 30 | ONSET 30, EDGE 40, PRESS Pad, SWELL 10, AIR 35 | SIZE 55 (2.5 s), DARK 45, DELAY 20, SPEED 55 |
-| Recorder | Steady and sweet, a little chiff | SOFT 60, PUFF 40, DECAY 30, SWAY 10, SPACE 30 | ONSET 35, EDGE 45, PRESS Pad, SWELL 15, AIR 30 | SIZE 50 (2.2 s), DARK 50, DELAY 15, SPEED 50 |
-| Clarinet | The chalumeau: a soft reed, low breath | SOFT 60, REED 30, DECAY 35, SWAY 20, SPACE 30 | ONSET 30, EDGE 40, PRESS Pad, SWELL 20, AIR 30 | SIZE 55 (2.5 s), DARK 50, DELAY 18, SPEED 55 |
-| Harmonium | A harmonium in a small room, the céleste half in (Nico) | SOFT 60, BEAT 40, DECAY 30, SPACE 20 | ONSET 20, EDGE 40, PRESS Pad, SWELL 30, AIR 30 | SIZE 40 (1.9 s), DARK 50, DELAY 10, SPEED 40 (the tremulant) |
-| Bowed Vibes | A bass bow on the bars, slow and pure | SOFT 60, GRIP 50, DECAY 60, SPACE 35 | BOW 40, BLUR 15, HIT 0, PRESS Pad, SWELL 35, NOISE 20 | SIZE 65 (3.1 s), DARK 40, DELAY 25 |
-| Glass Harmonica | Franklin's glass, a wet finger | SOFT 70, WET 50, DECAY 50, SPACE 35 | BOW 40, BLUR 10, HIT 0, PRESS Pad, SWELL 30, NOISE 15 | SIZE 65 (3.1 s), DARK 40, DELAY 25 |
-| Singing Bowl | A bowl struck lightly, then rubbed, its pairs beating slowly | SOFT 60, BEAT 40, DECAY 65, SPACE 35 | BOW 35, BLUR 10, HIT 40, PRESS Pad, SWELL 40, NOISE 15 | SIZE 70 (3.2 s), DARK 40, DELAY 30 |
-| Choir | A small chamber choir on "oo", three to a note, in a church | SOFT 60, VOWEL 25, DECAY 50, SWAY 20, SPACE 45 | CROWD 3, AIR 30, SWELL 40, PRESS Pad, SPLIT 30 | SIZE 70 (3.2 s), DARK 45, DELAY 20, SPEED 45 |
+| Felt Upright | Close and intimate (Frahm, *Felt*): a thick strip, the action loud and near | SOFT 55, FELT 35, DECAY 50, TONE 55, SPACE 10 | NOISE 60, SPLIT 30, BODY 60, DAMP 30 | Small and warm: SIZE 35 (1.7 s), DARK 55, DELAY 8, DRIVE 10 |
+| Una Corda Grand | Further off, on two strings, a touch darker, in a hall | SOFT 50, HUSH 45, DECAY 65, TONE 45, SPACE 10 | SPOT 25, SPLIT 25, BODY 55, NOISE 21, DAMP 30 | A hall: SIZE 65 (3.1 s), DARK 45, DELAY 30 |
+| Vibraphone | A slow motor, released bars left to ring a little | SOFT 50, MOTOR 22 (2.9 Hz), DECAY 60, SWAY 45, SPACE 10 | BODY 70, SPLIT 5, NOISE 15, DAMP 15 | Shimmering: SIZE 60 (2.7 s), DARK 35, DELAY 25 |
+| Marimba | Rosewood and yarn, nearly dry (Reich) | SOFT 50, ROLL 0, DECAY 58, TONE 52, SPACE 10 | BODY 75, SPLIT 5, NOISE 32, DAMP 0 | SIZE 45 (2.1 s), DARK 50, DELAY 15 |
+| Celesta | Felt hammers and a little bell (*Sugar Plum Fairy*) | SOFT 55, BELL 40, DECAY 50, SPACE 10 | BODY 60, SPLIT 5, NOISE 30, DAMP 30 | SIZE 55 (2.5 s), DARK 40, DELAY 20 |
+| Toy Piano | Slightly out of tune and clangy (Cage) | SOFT 45, BELL 50, DECAY 50, SPACE 10 | BODY 60, SPLIT 15, NOISE 40, DAMP 0 | Small: SIZE 30 (1.5 s), DARK 50, DELAY 5 |
+| Xylophone | Yarn mallets on rosewood | SOFT 60, ROLL 0, DECAY 55, SPACE 10 | BODY 70, SPLIT 5, NOISE 30, DAMP 0 | SIZE 45 (2.2 s), DARK 50, DELAY 15 |
+| Glockenspiel | Soft-wrapped mallets, long-ringing steel | SOFT 70, BELL 35, DECAY 50, TONE 45, SPACE 10 | BODY 30, SPLIT 5, NOISE 15, DAMP 0 | SIZE 60 (2.3 s), DARK 45, DELAY 25 |
+| Kalimba / Music Box | A thumb piano, its buzzers quiet | SOFT 60, BUZZ 0, DECAY 55, SPACE 10 | BODY 70, SPLIT 10, NOISE 30, DAMP 0 | SIZE 40 (1.8 s), DARK 50, DELAY 10 |
+| Electric Grand | A CP-70 in a ballad | SOFT 50, TWANG 35, DECAY 50, SWAY 20, SPACE 10 | BODY 50, SPLIT 20, NOISE 30, DAMP 30 | SIZE 45 (2.0 s), DARK 50, DELAY 12, SPEED 25 (a slow auto-pan) |
+| Tine Piano | A suitcase tine piano, voiced a little toward bark | SOFT 60, BARK 40, DECAY 55, SWAY 30, SPACE 10 | BODY 60, SPLIT 10, NOISE 25, DAMP 30 | SIZE 45 (2.0 s), DARK 50, DELAY 12, SPEED 30 (the slow stereo vibrato) |
+| Tonewheel Organ | *A Whiter Shade of Pale*: flutes `00 8800 000`, the Leslie slow | SOFT 50, LUSH 60, DECAY 30, SWAY 0, SPACE 10 | CLICK 35, LEAK 25, SLOW 30, FAST 60 | SIZE 40 (1.9 s), DARK 50, DELAY 10, DRIVE 20 (the preamp a little warm) |
+| Flute Organ | A chamber organ in a stone church: stopped 8′, open 4′ | SOFT 60, PUFF 45, DECAY 30, SWAY 10, SPACE 10 | EDGE 25, SWELL 35, 8′ 80, 4′ 50, 2′ 0 | SIZE 70 (3.2 s), DARK 45, DELAY 25, SPEED 55 (a 4.6 Hz tremulant) |
+| Glass E.Piano | An FM electric piano with its chorus | SOFT 60, GLASS 35, DECAY 55, SWAY 20, SPACE 10 | TUNE 50 (the bell pair on 3 : 1), TINE 45, SPLIT 25 | SIZE 50 (2.2 s), DARK 40, DELAY 15, SPEED 30 |
+| String Ensemble | *Oxygène*: viola and violin registers, a slow swell | SOFT 60, LUSH 70, DECAY 50, SWAY 0, SPACE 10 | EDGE 30, SWELL 45, 8′ 80, 4′ 60, 2′ 0 | SIZE 65 (3.0 s), DARK 45, DELAY 20 |
+| Reed Piano | A reed piano turned down in a small room | SOFT 60, BITE 45, DECAY 50, SWAY 25, SPACE 10 | BODY 50, SPLIT 8, NOISE 25, DAMP 30 | SIZE 35 (1.7 s), DARK 55, DELAY 8, SPEED 45 (its own tremolo), DRIVE 15 (the amplifier just warm) |
+| Tubular Bells | Chimes in a church, the pedal half down | SOFT 50, MUTE 20, DECAY 55, SPACE 10 | BODY 15, SPLIT 10, NOISE 25, DAMP 10 | SIZE 70 (3.2 s), DARK 45, DELAY 30 |
+| Handbells | The tierce half in, the bells beating gently | SOFT 60, MINOR 50, DECAY 55, SPACE 10 | BODY 30, SPLIT 15, NOISE 20, DAMP 0 | SIZE 65 (3.0 s), DARK 40, DELAY 25 |
+| Handpan | Fingertips, the shell's air under the low notes | SOFT 65, RING 55, DECAY 55, SPACE 10 | BODY 60, SPLIT 15, NOISE 30, DAMP 0 | SIZE 60 (2.7 s), DARK 45, DELAY 20 |
+| Tongue Drum | Rubber mallets on a wooden box | SOFT 60, RING 50, DECAY 50, SPACE 10 | BODY 65, SPLIT 10, NOISE 30, DAMP 0 | SIZE 45 (2.1 s), DARK 50, DELAY 12 |
+| Hammered Dulcimer | Courses a little apart, struck near the bridge, blooming | SOFT 60, BLOOM 55, DECAY 55, SPACE 10 | SPOT 20, SPLIT 35, BODY 80, NOISE 30, DAMP 0 | SIZE 50 (2.2 s), DARK 45, DELAY 15 |
+| Clavichord | In a small room: the tangent toward the end, stiff brass, the *Bebung* half in | SOFT 50, BEND 50, DECAY 40, SPACE 10 | SPOT 25, BODY 50, EDGE 60, NOISE 35, DAMP 50, STIFF 50 | Small: SIZE 30 (1.5 s), DARK 50, DELAY 5 |
+| Harp | A concert harp in a hall, its lower strings answering | SOFT 60, BLOOM 40, DECAY 70, SPACE 10 | SPOT 35, BODY 60, EDGE 45, NOISE 20, DAMP 5, STIFF 20 | A hall: SIZE 65 (3.1 s), DARK 45, DELAY 25 |
+| Nylon Guitar | Fingerstyle near the soundhole, the open strings ringing a little | SOFT 60, BLOOM 35, DECAY 50, SPACE 10 | SPOT 25, BODY 65, EDGE 40, NOISE 30, DAMP 20, STIFF 25 | SIZE 45 (2.1 s), DARK 50, DELAY 12 |
+| Pizzicato | Cellos and violas plucked with the pad of the finger, nearer the cello | SOFT 70, DEEP 60, DECAY 50, SPACE 10 | SPOT 45, BODY 70, EDGE 30, NOISE 35, DAMP 30, STIFF 15 | SIZE 60 (2.7 s), DARK 45, DELAY 20 |
+| Solo Cello | Sul tasto, a light bow, a slow vibrato, in a warm room | SOFT 60, VEIL 60, DECAY 40, SWAY 30, SPACE 10 | BODY 60, EDGE 40, PRESS Pad, SWELL 20, NOISE 25, BITE 30 | SIZE 50 (2.2 s), DARK 50, DELAY 15, SPEED 65 (a 5.4 Hz vibrato) |
+| Solo Violin | *Flautando*: fast and light over the fingerboard | SOFT 60, VEIL 60, DECAY 40, SWAY 30, SPACE 10 | BODY 60, EDGE 45, PRESS Pad, SWELL 30, NOISE 25, BITE 25 | SIZE 55 (2.5 s), DARK 45, DELAY 18, SPEED 68 |
+| String Section | A section in a hall, the players a little apart | SOFT 60, WIDTH 50, DECAY 50, SWAY 20, SPACE 10 | BODY 60, EDGE 40, PRESS Pad, SWELL 30, NOISE 20, BITE 20 | A hall: SIZE 70 (3.2 s), DARK 45, DELAY 25, SPEED 62 |
+| Flute | A flute in a warm hall, the lip a little over the hole | SOFT 60, COVER 30, DECAY 30, SWAY 25, SPACE 10 | ONSET 30, EDGE 45, PRESS Pad, SWELL 20, AIR 30 | SIZE 60 (2.7 s), DARK 45, DELAY 20, SPEED 65 |
+| Pan Flute | Stopped cane pipes with their puff | SOFT 60, PUFF 50, DECAY 30, SWAY 15, SPACE 10 | ONSET 25, EDGE 40, PRESS Pad, SWELL 20, AIR 25 | SIZE 65 (3.0 s), DARK 45, DELAY 25, SPEED 55 |
+| Ocarina | A clay vessel, nearly a pure tone | SOFT 60, PURE 50, DECAY 30, SWAY 15, SPACE 10 | ONSET 30, EDGE 40, PRESS Pad, SWELL 10, AIR 35 | SIZE 55 (2.5 s), DARK 45, DELAY 20, SPEED 55 |
+| Recorder | Steady and sweet, a little chiff | SOFT 60, PUFF 40, DECAY 30, SWAY 10, SPACE 10 | ONSET 35, EDGE 45, PRESS Pad, SWELL 15, AIR 30 | SIZE 50 (2.2 s), DARK 50, DELAY 15, SPEED 50 |
+| Clarinet | The chalumeau: a soft reed, low breath | SOFT 60, REED 30, DECAY 35, SWAY 20, SPACE 10 | ONSET 30, EDGE 40, PRESS Pad, SWELL 20, AIR 30 | SIZE 55 (2.5 s), DARK 50, DELAY 18, SPEED 55 |
+| Harmonium | A harmonium in a small room, the céleste half in (Nico) | SOFT 60, BEAT 40, DECAY 30, SPACE 10 | ONSET 20, EDGE 40, PRESS Pad, SWELL 30, AIR 30 | SIZE 40 (1.9 s), DARK 50, DELAY 10, SPEED 40 (the tremulant) |
+| Bowed Vibes | A bass bow on the bars, slow and pure | SOFT 60, GRIP 50, DECAY 60, SPACE 10 | BOW 40, BLUR 15, HIT 0, PRESS Pad, SWELL 35, NOISE 20 | SIZE 65 (3.1 s), DARK 40, DELAY 25 |
+| Glass Harmonica | Franklin's glass, a wet finger | SOFT 70, WET 50, DECAY 50, SPACE 10 | BOW 40, BLUR 10, HIT 0, PRESS Pad, SWELL 30, NOISE 15 | SIZE 65 (3.1 s), DARK 40, DELAY 25 |
+| Singing Bowl | A bowl struck lightly, then rubbed, its pairs beating slowly | SOFT 60, BEAT 40, DECAY 65, SPACE 10 | BOW 35, BLUR 10, HIT 40, PRESS Pad, SWELL 40, NOISE 15 | SIZE 70 (3.2 s), DARK 40, DELAY 30 |
+| Choir | A small chamber choir on "oo", three to a note, in a church | SOFT 60, VOWEL 25, DECAY 50, SWAY 20, SPACE 10 | CROWD 3, AIR 30, SWELL 40, PRESS Pad, SPLIT 30 | SIZE 70 (3.2 s), DARK 45, DELAY 20, SPEED 45 |
 
 Values are percentages; the times are the plate's measured ring (RT60). They are
 the voicings as first set; the changes of 2026-10-05 (*Close to the real thing*,
@@ -1169,7 +1177,7 @@ the sound by at least a set amount**, measured on a middle C:
 | NOISE | The knock heard at no less than −14 dB against the note, in the first 50 ms |
 | MOTOR, SWAY | A wobble of at least 6 dB, and none at zero |
 | BELL | The upper modes at least 12 dB up |
-| BUZZ | The sizzle above 6 kHz at least 10 dB up, to −30 dB or more against the note |
+| BUZZ | The sizzle above 6 kHz at least 10 dB up, to −40 dB or more against the note |
 | ROLL | A held note re-struck at least five times a second; none at zero |
 | MUTE | Rings at least 12 dB shorter at 1.5 s |
 | MINOR | The tierce at least 12 dB up |
@@ -1278,6 +1286,42 @@ were three more causes, each fixed:
 A survey of every instrument now flags only what belongs to it: a pluck, a bow's
 slip, a sawtooth's corner, the organ's key click, the kalimba's buzz.
 
+Later the same day the user heard **one click, under a second after pressing a
+pad, louder up the keys**, on the Clarinet and the Choir, and only with `PRESS`
+on Pad. A pad's first pressure reading arrives a moment after the press. Until
+then the note plays on its own swell; then pressure took over in one sample,
+from a smoothed pressure still at nothing, and the level dropped to a quarter at
+once: 27 to 36 dB above anything else in the note. **Pressure now takes over
+across 250 ms** (`press_level` in `quilt.h`), on the winds, the choir, the bowed
+strings and the bowed glass, and is smoothed over 25 ms rather than 12, since a
+pad sends a reading only about every 29 ms. Shorter hand-overs left a fast drop
+that made a high clarinet's reed spit.
+
+A build that logged every MIDI message on the Move showed what the pads send:
+the first reading 102 to 104 blocks (0.3 s) after the note on every one of 142
+notes, always 0, then one every 10 blocks, about 7 higher each time. That
+session, replayed through the old code, has a burst on 105 of 110 Choir notes
+(up to +42 dB) and 102 Clarinet notes; through the new, none over 1.3 dB. A test plays every pressure instrument low, middle and
+high with the readings arriving late, and fails at 3 dB over the note; it
+catches the old code at up to 45 dB, and also found 3 to 6 dB clicks on the
+harmonium, flutes, recorder and cello that the same change removed. The reed's
+output smoothing now glides across the block too.
+
+The user's description found it, after the obvious suspects measured clean (the
+Move's output matches the Mac's to one step; the slowest block takes 1.1 of its
+2.9 ms; the limiter is never reached; turning `AIR` off changed nothing).
+Synthetic tests had missed it because they sent pressure from the first block.
+
+**Tails ended in a gritty whistle**, high and aliasing, on most instruments (the
+user, 2026-10-05). The output was cut to 16 bits, not rounded, with no dither,
+so a fading tail's last few steps became distortion whose harmonics fold back
+down; the share above 6 kHz rose from −22 dB to −7 dB in the last 20 dB of a
+tail. The output is now **rounded with one step of triangular dither**, which
+fades out as the sound falls below eight steps, so a tail ends in exact silence,
+not hiss. The tests measure the engines with the dither off
+(`quilt_test_no_dither`), and one test checks it runs under a quiet note and
+stops when the tail has gone.
+
 ### Main (`root`): the same eight knobs for everything
 
 ```
@@ -1306,6 +1350,15 @@ instrument you are playing. Underneath, it is **one level per instrument** (38).
 Each level is gated with `visible_if: {"param": "type", "equals": "<instrument>"}`,
 so exactly one of them is ever shown. Levels that share an engine list the same
 keys, so the cost is only hierarchy text, about 12 KB.
+
+**The title fits the header whole.** The header gives the page name what the
+slot's title leaves, at worst 50 px of its 4×5 font, so seventeen long names
+were cut ("HAMMERED D"). Those pages are titled with a short name instead, the
+presets' own word where there is one: Upright, Una Corda, E.Grand, Organ, Pipe
+Organ, Glass EP, Ensemble, Glock, Chimes, Tongue, Kalimba, Nylon, Dulcimer,
+Strings, Bow Vibes, Armonica (the glass harmonica's own old name) and Bowl
+(`quilt_page_name`). `TYPE` and the presets keep the full names.
+`tests/plan.test.mjs` measures every page title with the host's font.
 
 **Every gate is on `type` itself**, never on a derived key. The grid re-plans
 only when the key that changed is itself a condition key
@@ -1763,7 +1816,7 @@ module black-box through the v2 API, as `chain_host` would.
 - **Every knob is heard.** Each knob, end to end on every instrument `TYPE`
   offers, meets its minimum in *Every knob is heard*; `BELL` brings the upper
   modes up 12 dB, and `BUZZ` raises the sizzle above 6 kHz by 10 dB, to at least
-  −30 dB against the note. These run against the shared defaults, not
+  −40 dB against the note. These run against the shared defaults, not
   the voicings, so they test the engine.
 - **Default sounds.** Turning `TYPE` onto each instrument sets every page to the
   same values as its factory preset, leaves `VOL` alone, and a repeated write

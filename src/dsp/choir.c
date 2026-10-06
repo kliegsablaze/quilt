@@ -178,7 +178,7 @@ void choir_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
     const int press_src = (int)slot(q, inst, "v_press", 0.0f);
     const float air = slot(q, inst, "v_air", 0.3f);
     const float soft = q->gs[G_SOFT];
-    const float pk = 1.0f - expf(-1.0f / (0.012f * QUILT_SR));
+    const float pk = 1.0f - expf(-1.0f / (PRESS_SMOOTH_S * QUILT_SR));
 
     /* SWAY: each singer's vibrato at SPEED, a little apart, coming in once
      * the note has spoken; and each singer's slow drift. Both move once a
@@ -205,7 +205,7 @@ void choir_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
      * reshaped when it has moved. */
     {
         float p0 = c->env;
-        if (v->got_press && press_src != 1) p0 = press_src == 0 ? fmaxf(c->press_s, 0.25f * c->env) : 0.5f * (c->env + c->press_s);
+        if (v->got_press && press_src != 1) p0 = press_level(c->env, c->press_s, v->hand, press_src);
         if (v->held && p0 > 0.05f) {
             const float se = fminf(1.0f, fmaxf(-0.3f, soft + 1.2f * (0.75f - p0)));
             if (fabsf(se - c->soft_eff) > 0.02f) pulse(c, se);
@@ -239,7 +239,7 @@ void choir_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
     const int held = v->held, use_press = v->got_press && press_src != 1;
     const float press = v->press, fade_step = v->fade_step, pan_l = c->pan_l, pan_r = c->pan_r;
     const float env_to = held ? c->lvl : 0.0f, env_k = held ? c->att_k : c->rel_k;
-    float env = c->env, press_s = c->press_s, nz_lp = c->nz_lp, fade = v->fade;
+    float env = c->env, press_s = c->press_s, nz_lp = c->nz_lp, fade = v->fade, hand = v->hand;
     uint32_t rng = c->rng;
     float z[2][CHOIR_FORMANTS][2], cfs[2][CHOIR_FORMANTS][3];
     memcpy(z, c->z, sizeof(z));
@@ -250,7 +250,8 @@ void choir_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         float p = env;
         if (use_press) {
             press_s += ((held ? press : 0.0f) - press_s) * pk;
-            p = press_src == 0 ? fmaxf(press_s, 0.25f * env) : 0.5f * (env + press_s);
+            hand = fminf(1.0f, hand + PRESS_HAND_STEP);
+            p = press_level(env, press_s, hand, press_src);
         }
         const float nz = noise(&rng);
         nz_lp += (nz - nz_lp) * 0.5f;
@@ -287,7 +288,7 @@ void choir_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         left[n] += y[0] * pan_l;
         right[n] += y[1] * pan_r;
     }
-    c->env = env, c->press_s = press_s, c->nz_lp = nz_lp, v->fade = fade;
+    c->env = env, c->press_s = press_s, c->nz_lp = nz_lp, v->fade = fade, v->hand = hand;
     c->rng = rng;
     memcpy(c->z, z, sizeof(z));
     c->t = t1;

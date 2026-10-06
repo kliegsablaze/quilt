@@ -122,11 +122,11 @@ static void presets(void *p) {
     CHECK(num(p, "preset_count") == QUILT_NPRESETS, "%d factory presets", QUILT_NPRESETS);
     char idx[16];
     const int marimba = quilt_type_index(quilt_instrument_by_name("Marimba"));
-    snprintf(idx, sizeof(idx), "%d", marimba * QUILT_PER_TYPE);
+    snprintf(idx, sizeof(idx), "%d", quilt_type_first_preset(marimba));
     A->set_param(p, "preset", idx);
     CHECK(is(p, "type", "Marimba") && is(p, "preset_name", "Marimba"), "a preset sets the instrument");
     CHECK(fabs(num(p, "decay") - 0.58) < 1e-3, "and Main to suit it");
-    snprintf(idx, sizeof(idx), "%d", marimba * QUILT_PER_TYPE + 1);
+    snprintf(idx, sizeof(idx), "%d", quilt_type_first_preset(marimba) + 1);
     A->set_param(p, "preset", idx);
     CHECK(is(p, "type", "Marimba") && is(p, "preset_name", "Marimba Roll") &&
           fabs(num(p, "c_marimba") - 0.6) < 1e-3 && fabs(num(p, "decay") - 0.58) < 1e-3,
@@ -151,8 +151,25 @@ static void presets(void *p) {
     A->destroy_instance(q);
     free(blob);
     A->set_param(p, "type", "Xylophone");
-    CHECK(num(p, "trim") == 0, "turning TYPE loads the default sound, untrimmed");
+    {
+        void *x = A->create_instance(".", "");
+        char first[16];
+        snprintf(first, sizeof(first), "%d", quilt_type_first_preset(quilt_type_index(quilt_instrument_by_name("Xylophone"))));
+        A->set_param(x, "preset", first);
+        CHECK(fabs(num(p, "trim") - num(x, "trim")) < 1e-4, "turning TYPE loads the default sound, with its own trim");
+        A->destroy_instance(x);
+    }
 
+    /* The groups run alphabetically by instrument, each TYPE's first preset
+     * is its own default, and each TYPE has exactly one group. */
+    int sorted = 1, maps = 1;
+    for (int g = 1; g < QUILT_NTYPES; g++)
+        sorted &= strcmp(quilt_preset_name((g - 1) * QUILT_PER_TYPE), quilt_preset_name(g * QUILT_PER_TYPE)) < 0;
+    for (int t = 0; t < QUILT_NTYPES; t++)
+        maps &= quilt_preset_type(quilt_type_first_preset(t)) == t &&
+                !strcmp(quilt_preset_name(quilt_type_first_preset(t)), QUILT_TYPE_NAMES[t]);
+    CHECK(sorted, "the preset groups are in alphabetical order");
+    CHECK(maps, "each TYPE's first preset is its default sound");
     /* Every name fits the preset page and is its own; every change is a key
      * of that instrument, never VOL. */
     for (int i = 0; i < QUILT_NPRESETS; i++) {
@@ -163,7 +180,7 @@ static void presets(void *p) {
         int dup = 0;
         for (int j = 0; j < i; j++) dup |= !strcmp(name, quilt_preset_name(j));
         CHECK(!dup, "preset name '%s' is used once", name);
-        const int inst = quilt_type_inst(i / QUILT_PER_TYPE);
+        const int inst = quilt_type_inst(quilt_preset_type(i));
         CHECK((i % QUILT_PER_TYPE == 0) == !*quilt_preset_changes(i),
               "preset '%s': the first of each is the default, the others change it", name);
         const char *c = quilt_preset_changes(i);
@@ -215,7 +232,7 @@ static void voicings(void *p) {
         const char *slug = QUILT_INST[inst].slug;
         void *ref = A->create_instance(".", "");
         char idx[8];
-        snprintf(idx, sizeof(idx), "%d", t * QUILT_PER_TYPE);
+        snprintf(idx, sizeof(idx), "%d", quilt_type_first_preset(t));
         A->set_param(ref, "preset", idx);
         A->set_param(p, "type", QUILT_TYPE_NAMES[(t + 1) % QUILT_NTYPES]);
         dirty(p, QUILT_INST[quilt_type_inst((t + 1) % QUILT_NTYPES)].slug);
@@ -267,7 +284,9 @@ static void state(void *p) {
           "state: preset then state, as the host restores, keeps the saved sound");
     A->destroy_instance(r);
     A->set_param(q, "state", "{\"v\":1,\"type\":\"Marimba\",\"preset\":14}");
-    CHECK(num(q, "preset") == 14 * QUILT_PER_TYPE, "state: a version 1 preset is its instrument's first");
+    CHECK(num(q, "preset") == quilt_type_first_preset(14), "state: a version 1 preset is its instrument's first");
+    A->set_param(q, "state", "{\"v\":2,\"type\":\"Marimba\",\"preset\":43}");
+    CHECK(num(q, "preset") == quilt_type_first_preset(14) + 1, "state: a version 2 preset keeps its instrument and place");
     A->set_param(q, "state", "{\"v\":7,\"future\":{\"x\":1},\"type\":\"Vibraphone\",\"soft\":\"x\"}");
     CHECK(is(q, "type", "Vibraphone"), "state: unknown keys and values are skipped");
     A->set_param(q, "state", "{\"type\":\"Banjo\"}");
@@ -888,7 +907,7 @@ static void audible(void) {
             hi[z] = 10 * log10(e + 1e-30) - 20 * log10(mag(2205, 8192, quilt_note_freq(kal, 60)));
             A->destroy_instance(p);
         }
-        CHECK(hi[1] > hi[0] + 10 && hi[1] > -30, "BUZZ: the buzzers' sizzle comes up at least 10 dB, to -30 dB or more "
+        CHECK(hi[1] > hi[0] + 10 && hi[1] > -40, "BUZZ: the buzzers' sizzle comes up at least 10 dB, to -40 dB or more "
               "(%.1f -> %.1f dB)", hi[0], hi[1]);
     }
 
@@ -1812,6 +1831,84 @@ static void cost(void) {
  * felt, then the softest: each sounds, and none rings up toward full scale.
  * The felt's stiffness once outran the contact's explicit step on the
  * thinnest strings and stiffest bars and blew up (DESIGN.md, Contact). */
+/* A pad's first pressure reading arrives a moment after the press: logged
+ * on the Move, 102 to 104 blocks (about 0.3 s) after the note on every one
+ * of 142 notes, always 0, then a reading every 10 blocks, about 7 higher
+ * each time. It used
+ * to take the level over at once, from a smoothed pressure still at
+ * nothing: one click, 27 to 36 dB above anything else in the note on the
+ * clarinet and the choir. Now no burst stands above the note before or
+ * after, on every instrument pressure plays. */
+static double burst_db(const float *x, int from, int to) {
+    double worst = 0;
+    for (int w = from; w + 64 <= to; w += 64) {
+        double e = 0;
+        for (int i = w; i < w + 64; i++) {
+            const double d = x[i] - 3 * x[i - 1] + 3 * x[i - 2] - x[i - 3];
+            e += d * d;
+        }
+        if (e > worst) worst = e;
+    }
+    return 10 * log10(worst + 1e-30);
+}
+
+static void pressure_arrives(void) {
+    static float x[44100];
+    for (int i = 0; i < QUILT_NINST; i++) {
+        if (quilt_type_index(i) < 0 || !QUILT_SHAPES[QUILT_INST[i].shape].sustained || banks_supports(i)) continue;
+        const int notes[3] = { 48, 64, 76 };
+        for (int k = 0; k < 3; k++) {
+            void *p = A->create_instance(".", "");
+            A->set_param(p, "type", QUILT_INST[i].name);
+            A->set_param(p, "space", "0");
+            midi3(p, 0x90, notes[k], 100);
+            int16_t out[256];
+            int n = 0;
+            for (int b = 0; n < 44100 - 128; b++) {
+                if (b >= 103 && (b - 103) % 10 == 0) midi3(p, 0xA0, notes[k], (b - 103) / 10 * 7 > 70 ? 70 : (b - 103) / 10 * 7);
+                A->render_block(p, out, 128);
+                for (int j = 0; j < 128; j++) x[n++] = out[2 * j] / 32768.0f;
+            }
+            const int at = 103 * 128;
+            const double before = burst_db(x, 6000, at - 512), arrival = burst_db(x, at - 256, at + 4410),
+                         after = burst_db(x, at + 13230, at + 22050);
+            CHECK(arrival < fmax(before, after) + 3, "%s %d: the pad's first reading arrives without a click "
+                  "(%+.1f dB over the note)", QUILT_INST[i].name, notes[k], arrival - fmax(before, after));
+            A->destroy_instance(p);
+        }
+    }
+}
+
+/* The 16 bits: rounded with dither while there is sound, so a quiet tail
+ * is not ground into distortion, and none at all once it has ended. */
+static void dither_out(void) {
+    quilt_test_no_dither = 0;
+    for (int on = 0; on < 2; on++) {
+        void *p = A->create_instance(".", "");
+        A->set_param(p, "type", "Glockenspiel");
+        A->set_param(p, "volume", "-45");
+        midi3(p, 0x90, 72, 90);
+        int16_t out[256];
+        quilt_test_no_dither = !on;
+        long differ = 0, last_sound = -1;
+        static int16_t keep[2][256 * 40];
+        for (int b = 0; b < 344 * 30; b++) {
+            if (b == 344) midi3(p, 0x80, 72, 0);
+            A->render_block(p, out, 128);
+            for (int i = 0; i < 256; i++) if (out[i]) last_sound = b;
+            if (b >= 100 && b < 140) memcpy(keep[on] + (b - 100) * 256, out, sizeof(out));
+        }
+        if (on) {
+            for (int i = 0; i < 256 * 40; i++) differ += keep[0][i] != keep[1][i];
+            CHECK(differ > 256 * 40 / 4, "dither runs under a quiet note (%ld of %d samples moved)", differ, 256 * 40);
+            CHECK(last_sound >= 0 && last_sound < 344 * 29, "and a finished tail is exact silence, no hiss (last sound %.1f s)",
+                  last_sound / 344.0);
+        }
+        A->destroy_instance(p);
+    }
+    quilt_test_no_dither = 1;
+}
+
 static void stable(void) {
     int bad = 0;
     char what[96] = "";
@@ -1837,6 +1934,7 @@ int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     A = move_plugin_init_v2(NULL);
     CHECK(A && A->api_version == 2, "v2 api");
+    quilt_test_no_dither = 1;
     void *p = A->create_instance(".", "");
     CHECK(p != NULL, "create");
 
@@ -1845,6 +1943,8 @@ int main(int argc, char **argv) {
     presets(p);
     voicings(p);
     state(p);
+    pressure_arrives();
+    dither_out();
     sound();
     pedal();
     wheel();

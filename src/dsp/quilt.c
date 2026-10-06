@@ -65,7 +65,7 @@ static void apply_pairs(quilt_t *q, int inst, const char *pairs) {
  * page, then the preset's own changes. Turning TYPE loads the instrument's
  * first preset, which has none. Only VOL stays. */
 void quilt_apply_preset(quilt_t *q, int preset) {
-    const int inst = quilt_type_inst(preset / QUILT_PER_TYPE);
+    const int inst = quilt_type_inst(quilt_preset_type(preset));
     const instrument_t *in = &QUILT_INST[inst];
     q->preset = preset;
     q->type = inst;
@@ -91,9 +91,10 @@ static void *create_instance(const char *module_dir, const char *json_defaults) 
     banks_reset(&q->banks);
     waveguide_bank_reset(&q->symp);
     q->bowbody.inst = -1;
-    quilt_apply_preset(q, 0);
+    quilt_apply_preset(q, quilt_type_first_preset(0));
     memcpy(q->gs, q->g, sizeof(q->g));
     q->trim_g = 1.0f;
+    q->dither = 0x9E3779B9u;
     q->fx.pre_s = 1.0f + q->g[G_DELAY] * 0.1f * QUILT_SR;
     if (quilt_build_contracts(q) != 0) {
         free(q);
@@ -141,7 +142,7 @@ static void set_param(void *instance, const char *key, const char *val) {
         /* A new instrument arrives with its own default sound; writing the
          * one already chosen changes nothing, so a repeated write is safe. */
         if (t < 0) fprintf(stderr, "quilt: rejected type '%s'\n", val);
-        else if (t != q->type) quilt_apply_preset(q, quilt_type_index(t) * QUILT_PER_TYPE);
+        else if (t != q->type) quilt_apply_preset(q, quilt_type_first_preset(quilt_type_index(t)));
         return;
     }
     if (!strcmp(key, "preset")) {
@@ -216,13 +217,29 @@ static int get_param(void *instance, const char *key, char *buf, int buf_len) {
 
 /* The output stage: 8 dB of headroom below the engines, so a loud chord of
  * eight notes stays clear of the limiter, and a limiter that leaves the
- * signal alone below -6 dBFS and bends smoothly to full scale above it. */
+ * signal alone below -6 dBFS and bends smoothly to full scale above it.
+ *
+ * Then 16 bits, rounded with a step's worth of triangular dither. Cut off
+ * instead, a fading tail's last few steps became a gritty, whistling
+ * distortion, its harmonics folding back down. The dither fades out as the
+ * sound falls through its last few steps, so a tail ends in silence, not
+ * in hiss. */
 #define HEADROOM 0.4f
 
-static inline int16_t limit(float x) {
+/* The tests measure the engines' own quiet sounds, so they can turn the
+ * dither off; nothing on the Move does. */
+int quilt_test_no_dither;
+
+static inline float dither(uint32_t *s) {
+    *s ^= *s << 13, *s ^= *s >> 17, *s ^= *s << 5;
+    const float a = (float)(*s & 0xFFFF), b = (float)(*s >> 16);
+    return (a + b) * (1.0f / 65536.0f) - 1.0f;
+}
+
+static inline int16_t limit(float x, float dg, uint32_t *s) {
     float a = fabsf(x);
     if (a > 0.5f) a = 0.5f + 0.5f * tanhf((a - 0.5f) * 2.0f);
-    return (int16_t)(copysignf(a, x) * 32000.0f);
+    return (int16_t)lrintf(copysignf(a, x) * 32000.0f + dg * dither(s));
 }
 
 static float volume_gain(float db) { return db <= -59.9f ? 0.0f : HEADROOM * powf(10.0f, db / 20.0f); }
@@ -244,10 +261,17 @@ static void render_block(void *instance, int16_t *out, int frames) {
         const float t0 = q->trim_g;
         q->trim_g += (powf(10.0f, q->trim / 20.0f) - t0) * (1.0f - expf(-(float)n / (0.02f * QUILT_SR)));
         const float g0 = volume_gain(q->gs_prev[G_VOLUME]) * t0, g1 = volume_gain(q->gs[G_VOLUME]) * q->trim_g;
+        /* The dither's depth: full above eight steps, none below half of one. */
+        float pk = 0.0f;
+        for (int i = 0; i < n; i++) pk = fmaxf(pk, fmaxf(fabsf(l[i]), fabsf(r[i])));
+        pk *= fmaxf(g0, g1) * 32000.0f;
+        const float d0 = q->dither_g, d1 = quilt_test_no_dither ? 0.0f : fminf(1.0f, fmaxf(0.0f, (pk - 0.5f) / 7.5f));
+        q->dither_g = d1;
         for (int i = 0; i < n; i++) {
-            float gain = g0 + (g1 - g0) * (float)(i + 1) / (float)n;
-            out[2 * (done + i)] = limit(l[i] * gain);
-            out[2 * (done + i) + 1] = limit(r[i] * gain);
+            const float x = (float)(i + 1) / (float)n;
+            const float gain = g0 + (g1 - g0) * x, dg = d0 + (d1 - d0) * x;
+            out[2 * (done + i)] = limit(l[i] * gain, dg, &q->dither);
+            out[2 * (done + i) + 1] = limit(r[i] * gain, dg, &q->dither);
         }
         done += n;
     }

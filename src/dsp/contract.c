@@ -133,7 +133,7 @@ static void build_hierarchy(sb_t *b) {
                  "{\"key\":\"space\"},{\"key\":\"volume\"}");
     for (int t = 0; t < QUILT_NTYPES; t++) {
         const instrument_t *in = &QUILT_INST[quilt_type_inst(t)];
-        sb_printf(b, ",{\"level\":\"i_%s\",\"label\":\"%s\"}", in->slug, in->name);
+        sb_printf(b, ",{\"level\":\"i_%s\",\"label\":\"%s\"}", in->slug, quilt_page_name(quilt_type_inst(t)));
     }
     for (int s = 0; s < SH_COUNT; s++)
         if (QUILT_SHAPES[s].extra_level && shape_offered((shape_t)s))
@@ -143,12 +143,13 @@ static void build_hierarchy(sb_t *b) {
     if (organ_offered()) sb_printf(b, ",{\"level\":\"fx_organ\",\"label\":\"Effects\"}");
     sb_printf(b, "]}");
 
-    /* One Instrument level per instrument, titled with its name, so its labels
-     * are its own. Its CHAR lives on Main only. */
+    /* One Instrument level per instrument, titled with its name (shortened
+     * where the header has no room), so its labels are its own. Its CHAR
+     * lives on Main only. */
     for (int t = 0; t < QUILT_NTYPES; t++) {
         const instrument_t *in = &QUILT_INST[quilt_type_inst(t)];
         const shape_def_t *sh = &QUILT_SHAPES[in->shape];
-        sb_printf(b, ",\"i_%s\":{\"label\":\"%s\"", in->slug, in->name);
+        sb_printf(b, ",\"i_%s\":{\"label\":\"%s\"", in->slug, quilt_page_name(quilt_type_inst(t)));
         gate(b, in->name);
         sb_printf(b, ",\"knobs\":");
         key_list(b, NULL, sh->keys, sh->nkeys);

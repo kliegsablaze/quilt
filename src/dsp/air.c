@@ -266,6 +266,7 @@ void air_note_on(quilt_t *q, voice_t *v) {
     a->Db_was = a->D;
     a->Dj_was = a->Dj;
     a->comp_was = a->comp;
+    a->soft_k_was = a->soft_k;
     a->y0_was = 0.0f;
     a->jg_was = a->jet_th * a->over;
     a->vib_ph = 0.5f + 0.5f * noise(&a->rng);
@@ -286,7 +287,7 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
     const float soft = q->gs[G_SOFT];
     /* SOFT: a gentler breath, less of it and more of it noise. */
     const float breath_max = r->breath * (1.15f - 0.35f * soft);
-    const float pk = 1.0f - expf(-1.0f / (0.012f * QUILT_SR));
+    const float pk = 1.0f - expf(-1.0f / (PRESS_SMOOTH_S * QUILT_SR));
     /* SWAY: breath vibrato at SPEED, in pitch and a little in level, coming
      * in after the note has spoken. */
     const float vdepth = fmaxf(q->gs[G_SWAY], q->modwheel) * r->vib_cents / 1200.0f * 0.6931f;
@@ -305,7 +306,7 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
      * is reshaped when it has moved. */
     {
         float p0 = a->env;
-        if (v->got_press && press_src != 1) p0 = press_src == 0 ? fmaxf(a->press_s, 0.25f * a->env) : 0.5f * (a->env + a->press_s);
+        if (v->got_press && press_src != 1) p0 = press_level(a->env, a->press_s, v->hand, press_src);
         if (v->held && p0 > 0.05f) {
             const float se = fminf(1.0f, fmaxf(-0.3f, soft + 1.4f * (0.75f - p0)));
             if (fabsf(se - a->soft_eff) > 0.02f) shape(r, a, se);
@@ -316,7 +317,8 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
     /* What is worked out once a block (the vibrato, and the voice reshaped
      * as the breath moves) glides across it from where the last block
      * ended, so nothing steps: two reads of each line, faded between, and
-     * the jet's gain, its offset and the level make-up ramped. */
+     * the jet's gain, its offset, the reed's smoothing and the level make-up
+     * ramped. */
     const float Db = fmaxf(2.0f, a->D / ratio), Dj = fmaxf(2.0f, a->Dj / ratio);
     const lag_t lb0 = lag_at(a->Db_was), lb = lag_at(Db), lj0 = lag_at(a->Dj_was), lj = lag_at(Dj);
     const int glide_b = Db != a->Db_was, glide_j = Dj != a->Dj_was;
@@ -326,11 +328,13 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
     for (int n = 0; n < frames; n++) {
         const float x = (float)(n + 1) * inv;
         const float y0 = a->y0_was + (y0_to - a->y0_was) * x, ty0 = soft_tanh(y0);
+        const float soft_k = a->soft_k_was + (a->soft_k - a->soft_k_was) * x;
         a->env += ((v->held ? a->lvl : 0.0f) - a->env) * (v->held ? a->att_k : a->rel_k);
         float p = a->env;
         if (v->got_press && press_src != 1) {
             a->press_s += ((v->held ? v->press : 0.0f) - a->press_s) * pk;
-            p = press_src == 0 ? fmaxf(a->press_s, 0.25f * a->env) : 0.5f * (a->env + a->press_s);
+            v->hand = fminf(1.0f, v->hand + PRESS_HAND_STEP);
+            p = press_level(a->env, a->press_s, v->hand, press_src);
         }
         onset *= onset_k;
         const float nz = noise(&a->rng);
@@ -410,8 +414,8 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
             /* SOFT: a gentle lip damps the reed, so it never quite slams
              * shut and the pressure's corners round, as a bow's do: a
              * smoothing of what the bore sends out. */
-            a->flow_lp += (d - a->flow_lp) * a->soft_k;
-            a->rlp2 += (a->flow_lp - a->rlp2) * a->soft_k;
+            a->flow_lp += (d - a->flow_lp) * soft_k;
+            a->rlp2 += (a->flow_lp - a->rlp2) * soft_k;
             y = a->rlp2 * (0.05f + 0.95f * p);
         } else {
             /* The free reed. Its swing grows toward the bellows' size. */
@@ -431,7 +435,7 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
             float flow = fmaxf(0.0f, x0 - gap * a->swing) + fmaxf(0.0f, x1 - gap * a->swing);
             flow *= sqrtf(fmaxf(0.0f, p)) * (1.0f + air * 2.0f * a->nz_lp);
             /* A soft reed's motion is rounder: SOFT smooths the pulses. */
-            a->flow_lp += (flow - a->flow_lp) * a->soft_k;
+            a->flow_lp += (flow - a->flow_lp) * soft_k;
             flow = a->flow_lp;
             /* What is heard is the flow, its steady part taken out, and the
              * reed chamber's resonance, which the flow's changes ring. */
@@ -462,6 +466,7 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
     a->Db_was = Db;
     a->Dj_was = Dj;
     a->comp_was = a->comp;
+    a->soft_k_was = a->soft_k;
     a->y0_was = y0_to;
     a->jg_was = jg_to;
     v->peak = peak;

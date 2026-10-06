@@ -740,7 +740,7 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
     }
 
     const float td = expf(-1.0f / (r->thump_ms * 0.001f * QUILT_SR));
-    const float buzz_a = r->ch == CH_BUZZ && q->charv[v->inst] > 0.02f ? 3.0f * q->charv[v->inst] : 0.0f;
+    const float buzz_a = r->ch == CH_BUZZ && q->charv[v->inst] > 0.02f ? noise_amount(q->charv[v->inst], 0.5f) : 0.0f;
     const float hd = expf(-1.0f / (0.03f * QUILT_SR));
     /* The pickup's gap: BARK and BITE bring the tine or reed nearer. */
     const float gap = r->pickup == PU_MAGNET ? 1.3f - 0.75f * q->charv[v->inst]

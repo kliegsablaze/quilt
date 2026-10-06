@@ -626,7 +626,7 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
      * comes in after the note has spoken. */
     const float depth = fmaxf(q->gs[G_SWAY], q->modwheel) * 40.0f / 1200.0f * 0.6931f;
     const float vib_hz = 0.5f + 7.5f * q->gs[G_SPEED];
-    const float pk = 1.0f - expf(-1.0f / (0.012f * QUILT_SR));
+    const float pk = 1.0f - expf(-1.0f / (PRESS_SMOOTH_S * QUILT_SR));
     /* The force rounds the corners of the motion (Cremer): a lighter bow,
      * over the fingerboard (VEIL) or with slack hair (SOFT), a rounder
      * corner reaching the bridge, so a darker note. The rounding is the
@@ -636,8 +636,7 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
     float rk;
     {
         float p0 = b->env;
-        if (v->got_press && press_src != 1)
-            p0 = press_src == 0 ? fmaxf(b->press_s, 0.25f * b->env) : 0.5f * (b->env + b->press_s);
+        if (v->got_press && press_src != 1) p0 = press_level(b->env, b->press_s, v->hand, press_src);
         const float f = fminf(1.0f, fmaxf(0.55f, (0.25f + 0.75f * p0) * b->force_mul + b->bite * expf(-b->t * 12.5f)));
         float fc = b->f0 * 30.0f * powf(f / 0.6f, 2.5f) * powf(0.12f / b->beta, 2.0f) * powf(0.025f, q->gs[G_SOFT]);
         fc = fminf(fmaxf(fc, 1.5f * b->f0), 0.45f * QUILT_SR);
@@ -689,7 +688,7 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
     const int held = v->held;
     const float press = v->press, fade_step = v->fade_step, one_a = 1.0f - b->a;
     const float gain0 = b->level * b->veil_comp * 0.1f;
-    float env = b->env, press_s = b->press_s, g = b->g, lift = b->lift, dc_mix = b->dc_mix, bt = b->t, fade = v->fade;
+    float env = b->env, press_s = b->press_s, g = b->g, lift = b->lift, dc_mix = b->dc_mix, bt = b->t, fade = v->fade, hand = v->hand;
     tint_t nzt = b->nz_t;
     uint32_t rng = b->rng;
     struct { float lz, hz, dcx, dcy, r1, r2, pl, pr, onset; } st[BOW_PLAYERS];
@@ -708,9 +707,8 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         float p = env;
         if (use_press) {
             press_s += ((held ? press : 0.0f) - press_s) * pk;
-            /* Pad: the pad, with a quarter of the swell under it, so a held
-             * key never falls silent; Blend, half each. */
-            p = press_src == 0 ? fmaxf(press_s, 0.25f * env) : 0.5f * (env + press_s);
+            hand = fminf(1.0f, hand + PRESS_HAND_STEP);
+            p = press_level(env, press_s, hand, press_src);
         }
         g += (g_to - g) * 0.002f;
         bite *= bite_k;
@@ -773,7 +771,7 @@ void bowed_render(quilt_t *q, voice_t *v, float *left, float *right, int frames)
         right[n] += rr;
         bt += dt;
     }
-    b->env = env, b->press_s = press_s, b->g = g, b->lift = lift, b->dc_mix = dc_mix, b->t = bt, v->fade = fade;
+    b->env = env, b->press_s = press_s, b->g = g, b->lift = lift, b->dc_mix = dc_mix, b->t = bt, v->fade = fade, v->hand = hand;
     b->nz_t = nzt;
     b->rng = rng;
     for (int i = 0; i < np; i++) {

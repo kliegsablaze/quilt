@@ -179,7 +179,7 @@ void banded_render(quilt_t *q, voice_t *v, float *left, float *right, int frames
     const float bow = slot(q, inst, "d_bow", 0.4f);
     const float noise_a = noise_amount(slot(q, inst, "d_noise", 0.17f), 7.0f) * (r->ch == DC_WET ? 1.0f - 0.6f * charv : 1.0f);
     const float soft = q->gs[G_SOFT];
-    const float pk = 1.0f - expf(-1.0f / (0.012f * QUILT_SR));
+    const float pk = 1.0f - expf(-1.0f / (PRESS_SMOOTH_S * QUILT_SR));
     /* The friction: GRIP presses the bow harder; a wet finger (WET) grips
      * smoothly and sings pure, a dry one squeaks; SOFT is a gentler hand. The grip is set against the
      * bow's speed, so the contact always sits on the falling part of the
@@ -227,7 +227,8 @@ void banded_render(quilt_t *q, voice_t *v, float *left, float *right, int frames
         float p = b->env;
         if (v->got_press && press_src != 1) {
             b->press_s += ((v->held ? v->press : 0.0f) - b->press_s) * pk;
-            p = press_src == 0 ? fmaxf(b->press_s, 0.25f * b->env) : 0.5f * (b->env + b->press_s);
+            v->hand = fminf(1.0f, v->hand + PRESS_HAND_STEP);
+            p = press_level(b->env, b->press_s, v->hand, press_src);
         }
         /* Released, the hand leaves in about 15 ms and the object rings. */
         b->lift += ((v->held ? 1.0f : 0.0f) - b->lift) * (v->held ? 1.0f : 0.0015f);

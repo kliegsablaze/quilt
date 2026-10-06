@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
         }
         void *p = a->create_instance(".", "");
         char idx[8];
-        snprintf(idx, sizeof(idx), "%d", i * QUILT_PER_TYPE);
+        snprintf(idx, sizeof(idx), "%d", quilt_type_first_preset(i));
         a->set_param(p, "preset", idx);
         a->set_param(p, "space", "0.5");
         a->set_param(p, "m_pedal", "1");

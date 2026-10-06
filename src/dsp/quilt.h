@@ -83,11 +83,16 @@ extern const char *const QUILT_TYPE_NAMES[QUILT_NTYPES];
 int quilt_instrument_by_name(const char *name);       /* -1 if none */
 int quilt_type_inst(int t);         /* TYPE option -> instrument */
 int quilt_type_index(int inst);     /* instrument -> TYPE option, or -1 if not offered */
+const char *quilt_page_name(int inst);   /* its Instrument page's title */
+extern int quilt_test_no_dither;          /* tests only (quilt.c) */
 const char *quilt_voicing(int inst);   /* "key=value" pairs; see instruments.c */
-/* Factory presets, QUILT_PER_TYPE per TYPE option in TYPE's order: the first
- * is the instrument's default sound, the others change it (presets.c). */
+/* Factory presets, QUILT_PER_TYPE per instrument, the instruments in
+ * alphabetical order (TYPE keeps its families): the first is the
+ * instrument's default sound, the others change it (presets.c). */
 #define QUILT_PER_TYPE 3
 #define QUILT_NPRESETS (QUILT_NTYPES * QUILT_PER_TYPE)
+int quilt_preset_type(int preset);      /* preset -> TYPE option */
+int quilt_type_first_preset(int t);     /* TYPE option -> its first preset */
 const char *quilt_preset_name(int preset);
 const char *quilt_preset_changes(int preset);   /* "key=value" pairs over the voicing */
 int quilt_instrument_by_slug(const char *slug, int len);
@@ -125,6 +130,25 @@ static inline float tint(tint_t *t, float x) {
     t->lp += (t->s1 - t->lp) * t->k;
     t->lp2 += (t->lp - t->lp2) * t->k;
     return t->lp2;
+}
+
+/* Pad pressure taking over a held note's level from its own swell. Until
+ * the pad's first reading arrives the note plays on its swell alone; the
+ * readings start a moment after the press, and taking over at once, from a
+ * smoothed pressure still at nothing, stepped the level: one click, under
+ * a second in, brighter up the keys. So the pressure takes over across
+ * 250 ms: shorter, the fall from the swell to a light first press still
+ * made a high clarinet's reed spit (replayed from a session logged on the
+ * Move: +4 dB at 150 ms, +1 dB at 250). Pad: the pad, with a quarter of
+ * the swell under it, so a held key never falls silent; Blend: half each. */
+#define PRESS_HAND_STEP (1.0f / (0.25f * QUILT_SR))
+/* The pads send a reading about every 29 ms (logged on the Move), so the
+ * pressure is smoothed over 25 ms: each step rounded off, still quick. 12 ms
+ * let a high clarinet's reed hear the steps. */
+#define PRESS_SMOOTH_S 0.025f
+static inline float press_level(float env, float press_s, float hand, int src) {
+    const float pp = src == 0 ? fmaxf(press_s, 0.25f * env) : 0.5f * (env + press_s);
+    return env + (pp - env) * hand;
 }
 
 typedef float v4 __attribute__((vector_size(16)));
@@ -253,7 +277,7 @@ typedef struct {
     float env, att_k, rel_k, lvl, press_s, onset, chiff;
     float nz_lp, vib_ph, t, level, pan_l, pan_r, jlp, jk, js, jamp, offset, jet_mul, noise_out, flow_lp, soft_k, jet_th, comp, rlp2, surge, fc, over, soft_eff, edge, charv;
     tint_t nz_t, chiff_t;
-    float Db_was, Dj_was, comp_was, y0_was, jg_was;   /* what the last block ended on */
+    float Db_was, Dj_was, comp_was, y0_was, jg_was, soft_k_was;   /* what the last block ended on */
     uint32_t rng;
 } air_voice_t;
 
@@ -297,6 +321,7 @@ typedef struct {
     float vel;
     float press;          /* last pad pressure, 0..1 */
     int got_press;
+    float hand;           /* how far pad pressure has taken over, 0..1 */
     float peak;           /* largest output in the last block, for stealing */
     int osc;              /* modal oscillators held, against MODAL_BUDGET */
     /* A voice plays one engine at a time, so they share the space: a new
@@ -371,6 +396,8 @@ typedef struct {
 typedef struct {
     int type, preset;
     float trim, trim_g;   /* the preset's level in dB, no knob (presets.c); its gain as heard */
+    uint32_t dither;      /* the output's dither noise */
+    float dither_g;       /* and its depth, from how loud the output is */
     float g[G_COUNT];               /* as set */
     float gs[G_COUNT], gs_prev[G_COUNT];   /* as heard: gliding toward g, this block and last */
     float charv[QUILT_NINST];

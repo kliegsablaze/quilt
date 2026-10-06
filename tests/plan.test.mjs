@@ -9,7 +9,8 @@ const [dir, schwung] = process.argv.slice(2);
 const load = (rel) => import(pathToFileURL(path.join(schwung, "src/shared/param_pages", rel)));
 const { planPages } = await load("page_plan.mjs");
 const { validateContract } = await load("validate_contract.mjs");
-const { labelVerbatim } = await load("render_page_movy.mjs");
+const { labelVerbatim, HEADER_MIN_LEFT, HEADER_GAP } = await load("render_page_movy.mjs");
+const { fontWidth4x5 } = await load("font4x5.mjs");
 
 const hierarchy = JSON.parse(fs.readFileSync(path.join(dir, "ui_hierarchy.json"), "utf8"));
 const chainParams = JSON.parse(fs.readFileSync(path.join(dir, "chain_params.json"), "utf8"));
@@ -53,7 +54,7 @@ for (const type of types) {
     check(charKeys.includes(char), `${type}: Main's third cell is a CHAR key, got ${char}`);
     check(all.filter((k) => charKeys.includes(k)).every((k) => k === char), `${type}: only its own CHAR is shown`);
 
-    const level = Object.entries(hierarchy.levels).find(([, l]) => l.visible_if && l.visible_if.equals === type && l.label === type);
+    const level = Object.entries(hierarchy.levels).find(([k, l]) => k.startsWith("i_") && l.visible_if && l.visible_if.equals === type);
     check(level, `${type}: has its own Instrument level`);
     if (level) {
         const want = level[1].knobs;
@@ -71,6 +72,16 @@ for (const type of types) {
 
     const cells = pages.map((p) => `[${p.keys.map((k) => (byKey[k] ? byKey[k].short_name : k).toUpperCase()).join(" ")}]`);
     console.log(`${type.padEnd(20)} ${cells.join(" ")}`);
+}
+
+// The header gives the page name what the slot's title leaves: at least the
+// title's floor (HEADER_MIN_LEFT) and the gap, from 128 px less 2 px a side.
+// Every page title must fit that whole, never cut.
+const pageRoom = 128 - 4 - HEADER_MIN_LEFT - HEADER_GAP;
+for (const [k, l] of Object.entries(hierarchy.levels)) {
+    if (k === "root") continue;
+    const w = fontWidth4x5(String(l.label).toUpperCase());
+    check(w <= pageRoom, `page "${l.label}" (${k}) is ${w} px, the header has ${pageRoom}`);
 }
 
 const { findings } = validateContract({ id: "quilt", hierarchy, chainParams, capabilities: {} });
