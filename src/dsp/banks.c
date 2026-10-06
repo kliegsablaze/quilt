@@ -130,6 +130,7 @@ void banks_note_on(quilt_t *q, int note, int vel) {
     k->on = 1;
     k->held = 1;
     k->inst = inst;
+    k->free = q->type_by_mod;
     k->t = 0.0f;
     /* Struck again while it fades, a key keeps its level (k->rel) and comes
      * back up from where it is, not in one step: the pipes and strings rise
@@ -528,13 +529,14 @@ static float bank_gain(bank_kind_t k) {
 void banks_render(quilt_t *q, float *left, float *right, int frames) {
     banks_t *b = &q->banks;
     /* A key belongs to the instrument it was struck on; turning TYPE lets go
-     * of it, and the pedal holds it as it would a struck note. */
+     * of it, unless modulation chose that instrument for it, and the pedal
+     * holds it as it would a struck note. */
     int present[3] = { 0, 0, 0 };
     for (int note = 0; note < BANK_KEYS; note++) {
         bank_key_t *k = &b->key[note];
         if (!k->on) continue;
         /* Caught by the pedal only if not already letting go. */
-        k->sus = k->inst == q->type && (k->held || (q->pedal && k->rel >= 1.0f));
+        k->sus = (k->inst == q->type || k->free) && (k->held || (q->pedal && k->rel >= 1.0f));
         present[kind_of(k->inst) - 1] = 1;
     }
     float mono[QUILT_MAX_BLOCK], l[QUILT_MAX_BLOCK], r[QUILT_MAX_BLOCK];

@@ -20,8 +20,13 @@ let fails = 0;
 const check = (ok, msg) => { if (!ok) { fails++; console.log("FAIL " + msg); } };
 
 // DESIGN.md, Control surface: every cell is a plain word that draws as typed.
+const isGap = (k) => /^mod\d_gap\d$/.test(k);
 for (const p of chainParams) {
     if (p.key === "preset") continue;
+    if (isGap(p.key)) {   // a blank cell: no word, no picture, nothing to turn
+        check(p.short_name.trim() === "" && p.name.trim() === "" && p.options.length === 1, `${p.key} is blank`);
+        continue;
+    }
     check(typeof p.short_name === "string" && p.short_name.length > 0, `${p.key} declares a cell word`);
     check(typeof p.name === "string" && p.name.length > 0, `${p.key} declares a header name`);
     const drawn = labelVerbatim(p.short_name);
@@ -34,15 +39,21 @@ check(types.length >= 4 && types.length <= 38, `4 to 38 instruments offered, got
 const main = ["type", "soft", null, "decay", "sway", "tone", "space", "volume"];
 const charKeys = chainParams.filter((p) => p.key.startsWith("c_")).map((p) => p.key);
 
+// The comparison the shadow UI makes (compareConditionValue): an exact
+// string match on the gate's value, for equals and not_equals.
+const kinds = byKey.mod1_kind.options;
+const defaults = { mod: "1", mod1_kind: "LFO", mod2_kind: "Envelope", mod3_kind: "Velocity", mod4_kind: "MPE" };
+const visibleFor = (values) => (cond) => {
+    const v = values[cond.param];
+    if (v === undefined) return true;
+    if (cond.equals !== undefined) return String(v) === String(cond.equals);
+    if (cond.not_equals !== undefined) return String(v) !== String(cond.not_equals);
+    return true;
+};
+const gateKeys = ["type", "mod", "mod1_kind", "mod2_kind", "mod3_kind", "mod4_kind"];
+
 for (const type of types) {
-    // The comparison the shadow UI makes (compareConditionValue): an exact
-    // string match on `type`, for equals and not_equals.
-    const visible = (cond) => {
-        if (cond.param !== "type") return true;
-        if (cond.equals !== undefined) return String(type) === String(cond.equals);
-        if (cond.not_equals !== undefined) return String(type) !== String(cond.not_equals);
-        return true;
-    };
+    const visible = visibleFor({ ...defaults, type });
     const plan = planPages({ hierarchy, chainParams, visible });
     const pages = plan.pages.filter((p) => Array.isArray(p.keys));
     const all = pages.flatMap((p) => p.keys);
@@ -68,11 +79,29 @@ for (const type of types) {
     check(all.includes("size") && all.includes("drive"), `${type}: Effects is reachable`);
     check(all.includes("speed") === (type !== "Vibraphone" && type !== "Tonewheel Organ"), `${type}: SPEED is shown only where it does something`);
     check(all.includes("o_16") === (type === "Tonewheel Organ"), `${type}: Drawbars only for the organ`);
-    check([...(plan.conditionKeys || [])].join() === "type", `${type}: the only gate key is type`);
+    check([...(plan.conditionKeys || [])].sort().join() === [...gateKeys].sort().join(),
+          `${type}: the gates are TYPE, MOD and each KIND, got ${[...(plan.conditionKeys || [])]}`);
+    const last = pages[pages.length - 1];
+    check(last && last.level === "mod1" && pages.filter((p) => /^mod\d$/.test(p.level)).length === 1,
+          `${type}: Modulation is one page, the last`);
 
     const cells = pages.map((p) => `[${p.keys.map((k) => (byKey[k] ? byKey[k].short_name : k).toUpperCase()).join(" ")}]`);
     console.log(`${type.padEnd(20)} ${cells.join(" ")}`);
 }
+
+// DESIGN.md, Modulation: MOD and KIND on top, then the KIND's own two knobs
+// (or two blank cells), and the two destinations with their depths below.
+const own = { LFO: ["shape", "rate"], Envelope: ["rise", "fall"], MPE: ["axis", "lag"], Velocity: null };
+for (let m = 1; m <= 4; m++) for (const kind of kinds) {
+    const values = { ...defaults, type: types[0], mod: String(m), [`mod${m}_kind`]: kind };
+    const pages = planPages({ hierarchy, chainParams, visible: visibleFor(values) }).pages.filter((p) => Array.isArray(p.keys));
+    const page = pages.find((p) => /^mod\d$/.test(p.level));
+    const top = (own[kind] || ["gap1", "gap2"]).map((k) => `mod${m}_${k}`);
+    const want = ["mod", `mod${m}_kind`, ...top, `mod${m}_aim1`, `mod${m}_depth1`, `mod${m}_aim2`, `mod${m}_depth2`];
+    check(page && page.keys.join() === want.join(), `Mod ${m} ${kind}: cells ${page && page.keys}`);
+}
+check(own && kinds.join() === "Velocity,MPE,LFO,Envelope", `the four kinds, got ${kinds}`);
+check(byKey.mod.options.join() === "1,2,3,4", "MOD picks one of four");
 
 // The header gives the page name what the slot's title leaves: at least the
 // title's floor (HEADER_MIN_LEFT) and the gap, from 128 px less 2 px a side.

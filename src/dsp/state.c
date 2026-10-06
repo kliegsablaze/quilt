@@ -1,6 +1,7 @@
 /*
  * `state`: one flat JSON object holding the Main and Effects keys, and the
- * CHAR value and own page values of every instrument TYPE offers. Reading
+ * CHAR value and own page values of every instrument TYPE offers, and the
+ * Modulation page's four modulators ("mod1_kind"...). Reading
  * it sets each value directly and never loads a voicing, so a saved sound
  * comes back exactly (DESIGN.md, Every instrument starts beautiful).
  *
@@ -42,6 +43,12 @@ int quilt_write_state(const quilt_t *q, char *buf, int buf_len) {
         int i = quilt_type_inst(t);
         put(&o, ",\"c_%s\":%.4f", QUILT_INST[i].slug, q->charv[i]);
     }
+    for (int m = 0; m < QUILT_MODS; m++)
+        for (int p = 0; p < MP_COUNT; p++) {
+            char key[32];
+            snprintf(key, sizeof(key), "mod%d_%s", m + 1, QUILT_MOD_PARAMS[p].key);
+            put(&o, ",\"%s\":%.4f", key, q->mod[m][p]);
+        }
     for (int t = 0; t < QUILT_NTYPES; t++) {
         int i = quilt_type_inst(t);
         shape_t s = QUILT_INST[i].shape;
@@ -93,6 +100,13 @@ static void apply(quilt_t *q, int *ver, const char *key, int klen, const char *s
     if (!strcmp(k, "trim")) { q->trim = clampf(num, -12.0f, 12.0f); return; }
     int g = quilt_global_index(k);
     if (g >= 0) { q->g[g] = clampf(num, QUILT_GLOBALS[g].min, QUILT_GLOBALS[g].max); return; }
+    int m, mp = quilt_mod_key(k, &m);
+    if (mp >= 0) {
+        const param_def_t *d = &QUILT_MOD_PARAMS[mp];
+        float v = clampf(num, d->min, d->max);
+        q->mod[m][mp] = d->kind == PK_FLOAT ? v : (float)(int)(v + 0.5f);
+        return;
+    }
     if (!strncmp(k, "c_", 2)) {
         int i = quilt_instrument_by_slug(k + 2, klen - 2);
         if (i >= 0) q->charv[i] = clampf(num, 0.0f, 1.0f);
@@ -116,6 +130,7 @@ void quilt_read_state(quilt_t *q, const char *s) {
     int ver = 1;
     if (!p) return;
     q->trim = 0.0f;   /* a blob carries its own trim, and one from before trims has none */
+    quilt_mod_reset(q);   /* and its modulation; one from before the Modulation page has none */
     p++;
     for (;;) {
         while (*p && *p != '"' && *p != '}') p++;

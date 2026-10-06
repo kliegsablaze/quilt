@@ -4,9 +4,10 @@
  *
  *   chain_params  every key once, with its cell word and header name.
  *   ui_hierarchy  Main, one Instrument level per instrument, the organ's
- *                 Drawbars and Effects. Every gate is `visible_if` on `type`
- *                 itself, because the grid re-plans only when the key just
- *                 written is a condition key (DESIGN.md, Host check).
+ *                 Drawbars, Effects and Modulation. Every gate is on a key
+ *                 its own knob writes (`type`, `mod`, `modN_kind`), because
+ *                 the grid re-plans only when the key just written is a
+ *                 condition key (DESIGN.md, Host check).
  *
  * Built once per instance in create_instance, which runs off the audio
  * callback on hosts from 1.7.0. Both stay well under the 128 KB buffers.
@@ -61,6 +62,9 @@ static void param_json(sb_t *b, const param_def_t *d) {
         sb_printf(b, "],\"options_as_string\":true");
     } else if (d->kind == PK_INT) {
         sb_printf(b, "\"type\":\"int\",\"min\":%d,\"max\":%d", (int)d->min, (int)d->max);
+    } else if (d->min < 0.0f) {   /* either way from the centre, as a percentage */
+        sb_printf(b, "\"type\":\"float\",\"min\":%g,\"max\":%g,\"step\":0.01,\"unit\":\"%%\"",
+                  (double)d->min, (double)d->max);
     } else if (d->unit) {
         sb_printf(b, "\"type\":\"float\",\"min\":%g,\"max\":%g,\"step\":0.5,\"unit\":\"%s\"",
                   (double)d->min, (double)d->max, d->unit);
@@ -114,6 +118,30 @@ static void build_chain_params(sb_t *b) {
             param_json(b, quilt_shape_param(s, k));
         }
     }
+    /* The Modulation page: which modulator, then each modulator's two blank
+     * cells and its knobs as "modN_<key>", headed "Mod N <name>". */
+    sb_printf(b, ",");
+    param_json(b, &QUILT_MOD_SELECT);
+    for (int m = 0; m < QUILT_MODS; m++) {
+        for (int i = 0; i < 2; i++) {
+            param_def_t d = QUILT_MOD_GAPS[i];
+            char key[32];
+            snprintf(key, sizeof(key), "mod%d_%s", m + 1, d.key);
+            d.key = key;
+            sb_printf(b, ",");
+            param_json(b, &d);
+        }
+        for (int p = 0; p < MP_COUNT; p++) {
+            param_def_t d = QUILT_MOD_PARAMS[p];
+            char key[32], name[64];
+            snprintf(key, sizeof(key), "mod%d_%s", m + 1, d.key);
+            snprintf(name, sizeof(name), "Mod %d %s", m + 1, d.name);
+            d.key = key;
+            d.name = name;
+            sb_printf(b, ",");
+            param_json(b, &d);
+        }
+    }
     sb_printf(b, ",{\"key\":\"preset\",\"name\":\"Preset\",\"type\":\"int\",\"min\":0,\"max\":%d}]",
               QUILT_NPRESETS - 1);
 }
@@ -155,6 +183,7 @@ static void build_hierarchy(sb_t *b) {
                       QUILT_SHAPES[s].extra_level, QUILT_SHAPES[s].extra_label);
     sb_printf(b, ",{\"level\":\"fx\",\"label\":\"Effects\"}");
     if (organ_offered()) sb_printf(b, ",{\"level\":\"fx_organ\",\"label\":\"Effects\"}");
+    for (int m = 1; m <= QUILT_MODS; m++) sb_printf(b, ",{\"level\":\"mod%d\",\"label\":\"Modulation\"}", m);
     sb_printf(b, "]}");
 
     /* One Instrument level per instrument, titled with its name (shortened
@@ -210,6 +239,36 @@ static void build_hierarchy(sb_t *b) {
         sb_printf(b, ",\"fx_organ\":{\"label\":\"Effects\",\"visible_if\":{\"param\":\"type\",\"equals\":"
                      "\"Tonewheel Organ\"},\"knobs\":[\"size\",\"dark\",\"delay\",\"drive\"],"
                      "\"params\":[\"size\",\"dark\",\"delay\",\"drive\"]}");
+
+    /* Modulation, one level per modulator, shown while MOD names it. Each
+     * KIND shows its own two knobs and hides the rest; Velocity has none, so
+     * two blank cells hold the destinations on the bottom row. Every KIND
+     * leaves exactly eight cells. tests/plan.test.mjs checks each. */
+    static const struct { const char *key, *kind; } SHOWN[] = {
+        { "shape", "LFO" }, { "rate", "LFO" }, { "rise", "Envelope" }, { "fall", "Envelope" },
+        { "axis", "MPE" }, { "lag", "MPE" }, { "gap1", "Velocity" }, { "gap2", "Velocity" },
+    };
+    for (int m = 1; m <= QUILT_MODS; m++) {
+        char keys[16][24];
+        int n = 0;
+        snprintf(keys[n++], 24, "mod");
+        snprintf(keys[n++], 24, "mod%d_kind", m);
+        for (size_t i = 0; i < sizeof(SHOWN) / sizeof(SHOWN[0]); i++) snprintf(keys[n++], 24, "mod%d_%s", m, SHOWN[i].key);
+        for (int r = 1; r <= 2; r++) {
+            snprintf(keys[n++], 24, "mod%d_aim%d", m, r);
+            snprintf(keys[n++], 24, "mod%d_depth%d", m, r);
+        }
+        sb_printf(b, ",\"mod%d\":{\"label\":\"Modulation\",\"visible_if\":{\"param\":\"mod\",\"equals\":\"%d\"},\"knobs\":[", m, m);
+        for (int i = 0; i < n; i++) sb_printf(b, "%s\"%s\"", i ? "," : "", keys[i]);
+        sb_printf(b, "],\"params\":[");
+        for (int i = 0; i < n; i++) {
+            sb_printf(b, "%s{\"key\":\"%s\"", i ? "," : "", keys[i]);
+            if (i >= 2 && i < 2 + (int)(sizeof(SHOWN) / sizeof(SHOWN[0])))
+                sb_printf(b, ",\"visible_if\":{\"param\":\"mod%d_kind\",\"equals\":\"%s\"}", m, SHOWN[i - 2].kind);
+            sb_printf(b, "}");
+        }
+        sb_printf(b, "]}");
+    }
     sb_printf(b, "}}");
 }
 

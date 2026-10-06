@@ -1810,6 +1810,188 @@ static void clicks(void) {
 }
 
 /* What one block costs here. The Move figure is measured in build step 3. */
+/* The Modulation page (DESIGN.md, Modulation). Each check plays a note
+ * through note(), whose "extra" sets the modulators. */
+static int active_inst(void *p) {
+    quilt_t *q = p;
+    for (int i = 0; i < QUILT_VOICES; i++)
+        if (q->v[i].active && q->v[i].held) return q->v[i].inst;
+    return -1;
+}
+static void modulation(void) {
+    /* The keys: served, kept, clamped. */
+    void *p = A->create_instance(".", "");
+    CHECK(is(p, "mod", "1") && is(p, "mod1_kind", "LFO") && is(p, "mod2_kind", "Envelope") &&
+          is(p, "mod3_kind", "Velocity") && is(p, "mod4_kind", "MPE"), "the four modulators start as four kinds");
+    CHECK(is(p, "mod1_aim1", "None") && num(p, "mod1_depth1") == 0, "and modulate nothing");
+    A->set_param(p, "mod", "3");
+    A->set_param(p, "mod2_aim2", "Mod 3 Rate");
+    A->set_param(p, "mod2_depth2", "-7");
+    CHECK(is(p, "mod", "3") && is(p, "mod2_aim2", "Mod 3 Rate") && fabs(num(p, "mod2_depth2") + 1) < 1e-4,
+          "MOD, AIM and DEPTH are kept, DEPTH clamped to -100%%");
+    CHECK(is(p, "mod1_gap1", " ") && is(p, "mod4_gap2", " "), "the blank cells answer a blank");
+    for (int w = 0; w < quilt_word_count(); w++) {
+        int found = 0;
+        for (int s = 0; s < SH_COUNT; s++)
+            for (int k = 0; k < quilt_shape_key_count((shape_t)s); k++)
+                found |= !strcmp(quilt_shape_param((shape_t)s, k)->cell, quilt_word(w));
+        CHECK(found, "AIM's word %s is a knob on some instrument", quilt_word(w));
+    }
+    for (int s = 0; s < SH_COUNT; s++)
+        for (int k = 0; k < quilt_shape_key_count((shape_t)s); k++) {
+            int found = 0;
+            for (int w = 0; w < quilt_word_count(); w++) found |= !strcmp(quilt_shape_param((shape_t)s, k)->cell, quilt_word(w));
+            CHECK(found, "%s can be aimed at", quilt_shape_param((shape_t)s, k)->key);
+        }
+
+    /* A factory preset leaves the page alone; a saved sound keeps it; a
+     * sound saved before the page had none. */
+    A->set_param(p, "mod2_kind", "LFO");
+    A->set_param(p, "mod2_aim1", "Tone");
+    A->set_param(p, "mod2_depth1", "-0.5");
+    A->set_param(p, "preset", "7");
+    CHECK(is(p, "mod2_kind", "LFO") && is(p, "mod2_aim1", "Tone"), "a factory preset leaves the modulation alone");
+    A->set_param(p, "type", "Marimba");
+    CHECK(fabs(num(p, "mod2_depth1") + 0.5) < 1e-4, "and so does TYPE");
+    char *blob = strdup(get(p, "state"));
+    void *r = A->create_instance(".", "");
+    A->set_param(r, "state", blob);
+    CHECK(is(r, "mod2_kind", "LFO") && is(r, "mod2_aim1", "Tone") && fabs(num(r, "mod2_depth1") + 0.5) < 1e-4 &&
+          is(r, "mod2_aim2", "Mod 3 Rate"), "state keeps the modulation");
+    A->set_param(r, "state", "{\"v\":3,\"type\":\"Marimba\"}");
+    CHECK(is(r, "mod2_kind", "Envelope") && is(r, "mod2_aim1", "None"), "a sound saved before the page has no modulation");
+    A->destroy_instance(r);
+    free(blob);
+    A->destroy_instance(p);
+
+    /* An LFO on VOL: in time with the tempo (120 BPM when the host says
+     * nothing) right of centre, free left of it. */
+    const char *organ = "Flute Organ";   /* steady: no Leslie */
+    p = note(organ, 60, 100, 44100 * 5, -1, "mod1_shape=Square;mod1_rate=0.47;mod1_aim1=Volume;mod1_depth1=0.15");
+    double hz = rate(44100, 4);
+    CHECK(fabs(hz - 2.0) < 0.1, "an LFO at 1/4 swings twice a second at 120 BPM (%.2f Hz)", hz);
+    CHECK(am_depth(44100, 44100 * 3) > 6, "and VOL follows it (%.1f dB)", am_depth(44100, 44100 * 3));
+    CHECK(fabs(num(p, "volume") + 24) < 1e-4, "while VOL's knob shows what was set");
+    A->destroy_instance(p);
+    CHECK(quilt_rate_sync(0.01f) == 0 && quilt_rate_sync(1.0f) == 17 && quilt_rate_beats(17) == 0.0625f,
+          "right of centre runs from 8 bars to 1/64");
+    p = note(organ, 60, 100, 44100 * 5, -1, "mod1_rate=-0.6;mod1_aim1=Volume;mod1_depth1=0.15");
+    hz = rate(44100, 4);
+    CHECK(fabs(hz - quilt_rate_hz(-0.6f)) < 0.1, "free, an LFO keeps its own rate (%.2f Hz, want %.2f)", hz, quilt_rate_hz(-0.6f));
+    A->destroy_instance(p);
+    p = note(organ, 60, 100, 44100 * 5, -1, "mod1_rate=-0.6;mod1_aim1=Volume;mod1_depth1=0");
+    CHECK(am_depth(44100, 44100 * 3) < 1, "at no depth, nothing moves (%.2f dB)", am_depth(44100, 44100 * 3));
+    A->destroy_instance(p);
+
+    /* Velocity on SOFT, each note its own: a hard note made soft is darker. */
+    double plain, softened;
+    p = note("Felt Upright", 60, 127, 44100, -1, NULL);
+    plain = centroid_at(2205);
+    A->destroy_instance(p);
+    p = note("Felt Upright", 60, 127, 44100, -1, "mod3_aim1=Soft;mod3_depth1=1");
+    softened = centroid_at(2205);
+    CHECK(softened < plain * 0.85, "velocity on SOFT softens a hard note (centroid %.0f Hz from %.0f)", softened, plain);
+    CHECK(fabs(num(p, "soft") - QUILT_GLOBALS[G_SOFT].def) < 1e-4, "and SOFT's knob shows what was set");
+    A->destroy_instance(p);
+
+    /* An envelope on VOL rises while the note is held. */
+    p = note(organ, 60, 100, 44100 * 2, -1, "mod2_rise=0.8;mod2_aim1=Volume;mod2_depth1=0.3");
+    const double early = db(rms_at(2205, 2205)), late = db(rms_at(44100 + 22050, 4410));
+    CHECK(late - early > 10, "an envelope on VOL rises over the note (%.1f dB)", late - early);
+    A->destroy_instance(p);
+
+    /* A note's own envelope moves what its engine reads as it plays: the
+     * flute's breath comes in over the held note. */
+    p = note("Flute", 72, 100, 44100 * 2, -1, "mod2_rise=0.8;mod2_aim1=Air;mod2_depth1=1");
+    const double dull = centroid_at(4410), breathy = centroid_at(44100 + 22050);
+    CHECK(breathy > dull * 1.1, "an envelope on the flute's AIR brings the breath in (%.0f to %.0f Hz)", dull, breathy);
+    A->destroy_instance(p);
+
+    /* MPE: pad pressure on VOL. */
+    p = note(organ, 60, 100, 44100, -1, "mod4_aim1=Volume;mod4_depth1=0.4;mod4_lag=0");
+    const double before = db(rms_at(22050, 4410));
+    midi3(p, 0xA0, 60, 127);
+    int16_t out[256];
+    for (int b = 0; b < 100; b++) A->render_block(p, out, 128);
+    for (int b = 0; b < 20; b++) {
+        A->render_block(p, out, 128);
+        for (int i = 0; i < 128; i++) wave[b * 128 + i] = out[2 * i] / 32768.0f;
+    }
+    CHECK(db(rms_at(0, 2560)) - before > 10, "pad pressure on VOL turns it up (%.1f dB)", db(rms_at(0, 2560)) - before);
+    A->destroy_instance(p);
+    p = A->create_instance(".", "");
+    A->set_param(p, "type", "Flute");
+    midi3(p, 0x91, 60, 100);
+    midi3(p, 0x92, 64, 100);
+    midi3(p, 0xD2, 90, 0);
+    midi3(p, 0xB1, 74, 127);
+    midi3(p, 0xE2, 127, 127);
+    {
+        quilt_t *q = p;
+        int ok = 0;
+        for (int i = 0; i < QUILT_VOICES; i++) {
+            const voice_t *v = &q->v[i];
+            if (!v->active) continue;
+            if (v->note == 60) ok += v->press == 0 && fabsf(v->mod.slide - 1) < 1e-4 && v->mod.bend == 0;
+            if (v->note == 64) ok += v->press > 0.7f && v->mod.slide == 0 && v->mod.bend > 0.99f;
+        }
+        CHECK(ok == 2, "MPE: each note hears only its own channel's pressure, slide and bend");
+    }
+    A->destroy_instance(p);
+
+    /* TYPE: velocity picks the instrument, note by note. */
+    p = A->create_instance(".", "");
+    A->set_param(p, "mod3_aim1", "Type");
+    A->set_param(p, "mod3_depth1", "0.5");
+    rms(p, 1, NULL);   /* the modulators take what was set at the next block */
+    midi3(p, 0x90, 60, 1);
+    const int gentle = active_inst(p);
+    midi3(p, 0x80, 60, 0);
+    midi3(p, 0x90, 62, 127);
+    const int hard = active_inst(p);
+    CHECK(gentle == quilt_instrument_by_name("Felt Upright") && hard == quilt_type_inst(19) && is(p, "type", "Felt Upright"),
+          "velocity on TYPE plays a hard note on another instrument, and TYPE's knob stays (%s, %s)",
+          gentle >= 0 ? QUILT_INST[gentle].name : "-", hard >= 0 ? QUILT_INST[hard].name : "-");
+    int peak = 0;
+    CHECK(rms(p, 100, &peak) > 0, "and it sounds");
+    A->destroy_instance(p);
+    p = A->create_instance(".", "");
+    A->set_param(p, "type", "Felt Upright");
+    A->set_param(p, "mod3_aim1", "Type");
+    A->set_param(p, "mod3_depth1", "0.25");
+    rms(p, 1, NULL);
+    midi3(p, 0x90, 60, 127);
+    {
+        const bank_key_t *k = &((quilt_t *)p)->banks.key[60];
+        CHECK(k->on && k->inst == quilt_type_inst(9) && k->free, "an instrument with shared tonewheels or pipes can be chosen too");
+    }
+    peak = 0;
+    CHECK(rms(p, 200, &peak) > 30, "and its key keeps sounding while held");
+    A->destroy_instance(p);
+
+    /* A ring of modulators, each on the next one's rate and depth, every
+     * kind of destination at full depth: it stays a sound. */
+    p = A->create_instance(".", "");
+    A->set_param(p, "type", "Felt Upright");
+    static const char *const kinds[] = { "LFO", "Envelope", "LFO", "MPE" };
+    static const char *const others[] = { "Tone", "Space", "Soft", "Edge" };
+    for (int m = 1; m <= 4; m++) {
+        char k[32], v[32];
+        snprintf(k, sizeof(k), "mod%d_kind", m); A->set_param(p, k, kinds[m - 1]);
+        snprintf(k, sizeof(k), "mod%d_shape", m); A->set_param(p, k, "Random");
+        snprintf(k, sizeof(k), "mod%d_rate", m); A->set_param(p, k, m % 2 ? "-0.9" : "0.9");
+        snprintf(k, sizeof(k), "mod%d_aim1", m); snprintf(v, sizeof(v), "Mod %d Rate", m % 4 + 1); A->set_param(p, k, v);
+        snprintf(k, sizeof(k), "mod%d_depth1", m); A->set_param(p, k, "1");
+        snprintf(k, sizeof(k), "mod%d_aim2", m); A->set_param(p, k, others[m - 1]);
+        snprintf(k, sizeof(k), "mod%d_depth2", m); A->set_param(p, k, "-1");
+    }
+    for (int n = 0; n < 6; n++) midi3(p, 0x90, 48 + 5 * n, 100);
+    peak = 0;
+    const double ring = rms(p, 3445, &peak);
+    CHECK(ring > 0 && ring == ring && peak < 32000, "a ring of four modulators stays a sound (rms %.0f, peak %d)", ring, peak);
+    A->destroy_instance(p);
+}
+
 static void cost(void) {
     void *p = A->create_instance(".", "");
     A->set_param(p, "type", "Felt Upright");
@@ -1824,6 +2006,22 @@ static void cost(void) {
     printf("cost: %.1f us per block, 16 low Felt Upright notes and the plate, %d oscillators "
            "(%.1f%% of a 2902 us block, on this machine)\n",
            us, quilt_modal_in_use((quilt_t *)p), us / 2902.0 * 100.0);
+    /* And with every modulator busy: an LFO and envelopes on the knobs every
+     * note reads as it plays. */
+    static const char *const routes[][2] = { { "mod1_aim1", "Tone" }, { "mod1_aim2", "Damp" }, { "mod2_aim1", "Body" },
+        { "mod2_aim2", "Space" }, { "mod3_aim1", "Volume" }, { "mod3_aim2", "Character" }, { "mod4_aim1", "Spot" },
+        { "mod4_aim2", "Mod 1 Rate" } };
+    for (int i = 0; i < 8; i++) {
+        char d[24];
+        A->set_param(p, routes[i][0], routes[i][1]);
+        snprintf(d, sizeof(d), "%.5s_depth%c", routes[i][0], routes[i][0][8]);
+        A->set_param(p, d, "0.3");
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (int b = 0; b < 2000; b++) A->render_block(p, out, 128);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    const double us2 = ((double)(t1.tv_sec - t0.tv_sec) * 1e9 + (double)(t1.tv_nsec - t0.tv_nsec)) / 2000 / 1e3;
+    printf("cost: %.1f us per block with all eight modulation routes (%+.1f us)\n", us2, us2 - us);
     A->destroy_instance(p);
 }
 
@@ -1971,6 +2169,7 @@ int main(int argc, char **argv) {
     choir();
     effects();
     clicks();
+    modulation();
     cost();
     A->destroy_instance(p);
 

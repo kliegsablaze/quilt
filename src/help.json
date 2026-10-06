@@ -349,6 +349,48 @@
             " organ, which have",
             " their own."
           ]
+        },
+        {
+          "title": "Modulation",
+          "lines": [
+            "MOD",
+            "  Which of the four",
+            "  modulators.",
+            "",
+            "KIND",
+            "  What it follows:",
+            "  Velocity, MPE, LFO",
+            "  or Envelope.",
+            "",
+            "SHAPE, RATE",
+            "  The LFO's wave and",
+            "  speed. Right of",
+            "  centre: in time,",
+            "  8 bars to 1/64.",
+            "  Left: free, slow",
+            "  to fast.",
+            "",
+            "RISE, FALL",
+            "  The envelope: up",
+            "  while held, down",
+            "  after.",
+            "",
+            "AXIS, LAG",
+            "  MPE pressure,",
+            "  slide or bend, and",
+            "  its smoothing.",
+            "",
+            "AIM, DEPTH",
+            "  Two destinations:",
+            "  any knob on any",
+            "  page, TYPE and the",
+            "  other modulators",
+            "  too. DEPTH goes",
+            "  either way.",
+            "",
+            "  Presets leave this",
+            "  page alone."
+          ]
         }
       ]
     },

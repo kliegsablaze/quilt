@@ -74,6 +74,33 @@ enum {
     G_SPEED, G_SIZE, G_DARK, G_DELAY, G_TONE, G_DRIVE, G_COUNT
 };
 
+/* ---- Modulation: four modulators on their own page (mod.c; DESIGN.md,
+ * Modulation). A modulator's knobs, in the order its destinations name them. */
+#define QUILT_MODS 4
+#define QUILT_MAX_WORDS 40
+enum { MK_VELOCITY, MK_MPE, MK_LFO, MK_ENV };
+enum {
+    MP_KIND, MP_SHAPE, MP_RATE, MP_RISE, MP_FALL, MP_AXIS, MP_LAG,
+    MP_AIM1, MP_DEPTH1, MP_AIM2, MP_DEPTH2, MP_COUNT
+};
+
+/* A note's own modulation sources. */
+typedef struct {
+    float env[QUILT_MODS], mpe[QUILT_MODS];   /* ENV and MPE, as this note hears them */
+    float slide, bend;                        /* MPE input: CC74 0..1, pitch bend -1..1 */
+    int chan;
+    float gd[G_COUNT];                        /* last block's move of Main and Effects, for the glide */
+} voice_mod_t;
+
+/* One context's modulation, and what it laid over the knobs (mod_apply). */
+typedef struct {
+    int n, ns;
+    int aim[2 * QUILT_MODS];
+    float off[2 * QUILT_MODS];
+    float *ptr[2 * QUILT_MODS], val[2 * QUILT_MODS];
+    float g[G_COUNT], gs[G_COUNT], gsp[G_COUNT];
+} mod_ctx_t;
+
 extern const instrument_t QUILT_INST[QUILT_NINST];
 extern const shape_def_t QUILT_SHAPES[SH_COUNT];
 extern const param_def_t QUILT_GLOBALS[G_COUNT];
@@ -325,6 +352,7 @@ typedef struct {
     float hand;           /* how far pad pressure has taken over, 0..1 */
     float peak;           /* largest output in the last block, for stealing */
     int osc;              /* modal oscillators held, against MODAL_BUDGET */
+    voice_mod_t mod;
     /* A voice plays one engine at a time, so they share the space: a new
      * note clears, and a stolen one copies, the largest of them, not all. */
     union {
@@ -344,6 +372,7 @@ typedef struct {
 #define BANK_WHEELS 96          /* 91 wheels, padded to groups of four */
 typedef struct {
     int on, held, inst;
+    int free;               /* struck on an instrument modulation chose, so TYPE does not let it go */
     int sus;                /* sounding as held: down, or caught by the pedal */
     float t;                /* since the key went down, s */
     float rel;              /* the release, 1 while held */
@@ -412,6 +441,24 @@ typedef struct {
     wg_bank_t symp;
     struct { int inst; float z[2][4][2], x[2][2], dcx[2], dcy[2]; } bowbody;   /* the bowed strings' shared body */
     fx_t fx;
+    /* Modulation (mod.c). */
+    int mod_sel;                         /* the modulator the page shows, 0..3 */
+    float mod[QUILT_MODS][MP_COUNT];     /* as set */
+    struct mod_run {
+        float e[MP_COUNT];               /* as heard this block, after the other modulators */
+        float lfo, out;                  /* the LFO; the source's value for the newest note */
+        float env, mpe;                  /* the newest note's envelope and MPE */
+        float r0, r1;                    /* the random shapes' last and next values */
+        double ph;
+        uint32_t rng;
+    } run[QUILT_MODS];
+    float lead_vel, lead_press, lead_slide, lead_bend;   /* the newest note's */
+    int lead_note, lead_chan, midi_chan, held_keys, type_by_mod;
+    unsigned char key_down[128];
+    float ch_slide[16], ch_bend[16];
+    float shared_gd[G_COUNT];
+    float vol_d, vol_d_prev;            /* VOL's move this block and last, in dB */
+    signed char word_slot[SH_COUNT][QUILT_MAX_WORDS];   /* an Instrument-page word's knob on each shape */
     char *hierarchy, *chain_params;
     int hierarchy_len, chain_params_len;
 } quilt_t;
@@ -433,6 +480,31 @@ int quilt_sway_is_pan(int inst);
 int quilt_speed_shown(int inst);
 int quilt_built(int inst);
 int quilt_modal_in_use(const quilt_t *q);
+
+/* mod.c */
+extern const param_def_t QUILT_MOD_SELECT;            /* "mod" */
+extern const param_def_t QUILT_MOD_GAPS[2];           /* "modN_gap1", "modN_gap2" */
+extern const param_def_t QUILT_MOD_PARAMS[MP_COUNT];  /* "modN_<key>" */
+int quilt_mod_key(const char *key, int *mod_out);     /* MP_ index, or -1 */
+int quilt_aim_count(void);
+const char *quilt_aim_name(int i);
+int quilt_word_count(void);
+const char *quilt_word(int i);
+int quilt_rate_sync(float rate);        /* the bar division, or -1 when free */
+float quilt_rate_beats(int sync);
+float quilt_rate_hz(float rate);
+struct host_api_v1;
+void quilt_mod_set_host(const struct host_api_v1 *h);
+void quilt_mod_init(quilt_t *q);
+void quilt_mod_reset(quilt_t *q);
+void mod_block(quilt_t *q, int frames);
+void mod_voice(quilt_t *q, voice_t *v, int frames, mod_ctx_t *c);
+void mod_shared(quilt_t *q, mod_ctx_t *c);
+int mod_note(quilt_t *q, int note, int vel, mod_ctx_t *c, voice_mod_t *vm);
+void mod_apply(quilt_t *q, mod_ctx_t *c, int inst, float *gd);
+void mod_restore(quilt_t *q, const mod_ctx_t *c);
+void quilt_slide(quilt_t *q, int ch, float x);
+void quilt_bend(quilt_t *q, int ch, float x);
 
 /* modal.c */
 int modal_supports(int inst);

@@ -82,7 +82,26 @@ static int quietest(const quilt_t *q, int except_note) {
     return best;
 }
 
+static void note_on(quilt_t *q, int note, int vel, const voice_mod_t *vm, const mod_ctx_t *c);
+
+/* A note starts with its own modulation laid over the knobs, and on the
+ * instrument TYPE's modulation chose for it (mod.c). */
 void quilt_note_on(quilt_t *q, int note, int vel) {
+    mod_ctx_t c;
+    voice_mod_t vm;
+    const int base = q->type;
+    const int inst = mod_note(q, note, vel, &c, &vm);
+    if (!q->key_down[note & 127]) { q->key_down[note & 127] = 1; q->held_keys++; }
+    q->type = inst;
+    q->type_by_mod = inst != base;
+    mod_apply(q, &c, inst, NULL);
+    note_on(q, note, vel, &vm, &c);
+    mod_restore(q, &c);
+    q->type = base;
+    q->type_by_mod = 0;
+}
+
+static void note_on(quilt_t *q, int note, int vel, const voice_mod_t *vm, const mod_ctx_t *c) {
     if (banks_supports(q->type)) { banks_note_on(q, note, vel); return; }
     const int fm = fm_supports(q->type), wg = waveguide_supports(q->type), bow = bowed_supports(q->type);
     const int air = air_supports(q->type), band = banded_supports(q->type), ch = choir_supports(q->type);
@@ -118,6 +137,8 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
     v->inst = q->type;
     v->vel = (float)vel / 127.0f;
     v->fade = 1.0f;
+    v->mod = *vm;
+    for (int g = 0; g < G_COUNT; g++) v->mod.gd[g] = q->g[g] - c->g[g];   /* what the note started under */
     if (fm) fm_note_on(q, v);
     else if (wg) waveguide_note_on(q, v);
     else if (bow) bowed_note_on(q, v);
@@ -128,6 +149,7 @@ void quilt_note_on(quilt_t *q, int note, int vel) {
 }
 
 void quilt_note_off(quilt_t *q, int note) {
+    if (q->key_down[note & 127]) { q->key_down[note & 127] = 0; q->held_keys--; }
     for (int i = 0; i < QUILT_VOICES; i++) {
         voice_t *v = &q->v[i];
         if (v->active && v->note == note) v->held = 0;
@@ -136,9 +158,12 @@ void quilt_note_off(quilt_t *q, int note) {
 }
 
 void quilt_pressure(quilt_t *q, int note, int value) {
+    /* A note's own pressure, or a channel's: MPE gives each note a channel. */
+    const int ch = q->midi_chan & 15;
+    if (note >= 0 ? note == q->lead_note : ch == q->lead_chan) q->lead_press = (float)value / 127.0f;
     for (int i = 0; i < QUILT_VOICES; i++) {
         voice_t *v = &q->v[i];
-        if (!v->active || (note >= 0 && v->note != note)) continue;
+        if (!v->active || (note >= 0 ? v->note != note : v->mod.chan != ch)) continue;
         v->press = (float)value / 127.0f;
         v->got_press = 1;
     }
@@ -148,6 +173,8 @@ void quilt_all_off(quilt_t *q) {
     for (int i = 0; i < QUILT_VOICES; i++)
         if (q->v[i].active) quilt_note_off(q, q->v[i].note);
     for (int k = 0; k < BANK_KEYS; k++) banks_note_off(q, k);
+    memset(q->key_down, 0, sizeof(q->key_down));
+    q->held_keys = 0;
     q->pedal = 0;
 }
 
@@ -166,9 +193,15 @@ void quilt_render(quilt_t *q, float *left, float *right, int frames) {
     const float k = 1.0f - expf(-(float)frames / (0.02f * QUILT_SR));
     for (int i = 0; i < G_COUNT; i++) q->gs[i] += (q->g[i] - q->gs[i]) * k;
 
+    /* Each note renders under its own modulation, then what every note
+     * shares under the newest note's (mod.c). */
+    mod_block(q, frames);
+    mod_ctx_t c;
     for (int i = 0; i < QUILT_VOICES + QUILT_GHOSTS; i++) {
         voice_t *v = &q->v[i];
         if (!v->active) continue;
+        mod_voice(q, v, frames, &c);
+        mod_apply(q, &c, v->inst, v->mod.gd);
         if (fm_supports(v->inst)) fm_render(q, v, left, right, frames);
         else if (waveguide_supports(v->inst)) waveguide_render(q, v, left, right, bridge, frames);
         else if (bowed_supports(v->inst)) bowed_render(q, v, bl, br, frames);
@@ -176,7 +209,10 @@ void quilt_render(quilt_t *q, float *left, float *right, int frames) {
         else if (banded_supports(v->inst)) banded_render(q, v, left, right, frames);
         else if (choir_supports(v->inst)) choir_render(q, v, left, right, frames);
         else modal_render(q, v, left, right, board, frames);
+        mod_restore(q, &c);
     }
+    mod_shared(q, &c);
+    mod_apply(q, &c, q->type, q->shared_gd);
     waveguide_bank_render(q, bridge, left, right, frames);
     bowed_body(q, bl, br, left, right, frames);
     banks_render(q, left, right, frames);
@@ -187,4 +223,8 @@ void quilt_render(quilt_t *q, float *left, float *right, int frames) {
     q->motor = fmodf(q->motor + TWO_PI * rate * (float)frames / QUILT_SR, TWO_PI);
 
     fx_process(q, left, right, board, frames);
+    /* VOL is applied after this returns (quilt.c), so its move is kept. */
+    q->vol_d_prev = q->vol_d;
+    q->vol_d = q->g[G_VOLUME] - c.g[G_VOLUME];
+    mod_restore(q, &c);
 }

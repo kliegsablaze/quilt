@@ -676,9 +676,88 @@ D.speed = (c, v, s) => {                       /* how fast the sway goes, moving
     waveTone(c, 3, 28, 6, 4, 1 + v * 2, (x) => x, -ph * (1 + v * 2));
 };
 
+/* MODULATION ------------------------------------------------------------ */
+/* Which modulator: four boxes, the chosen one filled. */
+D.modsel = (c, v) => {
+    const k = Math.round(v * 3);
+    for (let i = 0; i < 4; i++) {
+        const x = 3 + i * 7;
+        if (i === k) c.fillRect(x, 3, 5, 6, 1);
+        else { hline(c, x, x + 4, 3); hline(c, x, x + 4, 8); vline(c, x, 3, 8); vline(c, x + 4, 3, 8); }
+    }
+};
+const lfoWave = (shape, u) => {              /* -1..1 at u cycles, as mod.c draws it */
+    const p = u - Math.floor(u), n = Math.floor(u);
+    switch (shape) {
+    case 1: return 1 - 4 * Math.abs(p - 0.5);
+    case 2: return 1 - 2 * p;
+    case 3: return 2 * p - 1;
+    case 4: return p < 0.5 ? 1 : -1;
+    case 5: return hash(n + 7) * 2 - 1;
+    case 6: { const a = hash(n + 6) * 2 - 1, b = hash(n + 7) * 2 - 1; return a + (b - a) * (0.5 - 0.5 * Math.cos(Math.PI * p)); }
+    default: return Math.sin(u * TAU);
+    }
+};
+const lfoCurve = (c, shape, x0, x1, mid, amp, cyc, ph) => curve(c, x0, x1, (x) => mid - amp * lfoWave(shape, ((x - x0) / (x1 - x0)) * cyc + (ph || 0)));
+D.mod_kind = (c, v) => {
+    const k = Math.round(v * 3);
+    if (k === 0) {                             /* Velocity: harder and harder strikes */
+        for (let i = 0; i < 5; i++) { const x = 6 + i * 5, h = 2 + i * 2; vline(c, x, 11 - h, 11); hline(c, x - 1, x + 1, 11 - h); }
+    } else if (k === 1) {                      /* MPE: a fingertip pressing a pad */
+        hline(c, 5, 26, 10); hline(c, 5, 26, 11); c.drawCircle(16, 5, 3, 1);
+        dotted(c, 7, 12, () => 8, 2); dotted(c, 20, 25, () => 8, 2);
+    } else if (k === 2) lfoCurve(c, 0, 4, 27, 6, 4, 2);   /* LFO */
+    else {                                     /* Envelope: up, held, down */
+        c.line(4, 10, 10, 2, 1); hline(c, 10, 20, 2); curve(c, 20, 28, (x) => 10 - 8 * Math.exp(-(x - 20) / 2.5)); hline(c, 4, 28, 11);
+    }
+};
+D.mod_shape = (c, v) => lfoCurve(c, Math.round(v * 6), 4, 27, 6, 4, 2);
+/* RATE: the wave at its speed, and the speed in plain figures. */
+const SYNC = ["8BAR", "4BAR", "2BAR", "1BAR", "1/2.", "1/2", "1/2T", "1/4.", "1/4", "1/4T", "1/8.", "1/8", "1/8T",
+    "1/16.", "1/16", "1/16T", "1/32", "1/64"];
+function rateText(rate) {
+    if (rate > 0) return SYNC[Math.min(SYNC.length - 1, Math.floor(rate * SYNC.length))];
+    const hz = 0.02 * Math.pow(1000, Math.min(1, -rate));
+    return (hz < 1 ? hz.toFixed(2) : hz < 10 ? hz.toFixed(1) : String(Math.round(hz))) + "HZ";
+}
+D.mod_rate = (c, v, s) => {
+    const rate = v * 2 - 1, a = Math.abs(rate);
+    const ph = phase(s.key, 0.3 + a * 2.5, s.now);
+    lfoCurve(c, 0, 4, 27, 1.5, 1.5, 1 + a * 3, -ph * (1 + a * 3));
+    c.text(rateText(rate), 9);
+};
+D.mod_rise = (c, v) => { const x1 = 4 + Math.round(v * 16); c.line(4, 10, x1, 2, 1); hline(c, x1, 27, 2); hline(c, 4, 28, 11); };
+D.mod_fall = (c, v) => { const L = 1 + v * 9; vline(c, 4, 2, 10); hline(c, 4, 8, 2); curve(c, 8, 28, (x) => 10 - 8 * Math.exp(-(x - 8) / L)); hline(c, 4, 28, 11); };
+D.mod_axis = (c, v) => {
+    const k = Math.round(v * 2);
+    if (k === 0) { vline(c, 16, 1, 7); c.line(13, 4, 16, 7, 1); c.line(19, 4, 16, 7, 1); hline(c, 8, 24, 10); hline(c, 8, 24, 11); }
+    else if (k === 1) { vline(c, 16, 1, 10); c.line(13, 4, 16, 1, 1); c.line(19, 4, 16, 1, 1); c.line(13, 7, 16, 10, 1); c.line(19, 7, 16, 10, 1); }
+    else { hline(c, 5, 26, 6); c.line(8, 3, 5, 6, 1); c.line(8, 9, 5, 6, 1); c.line(23, 3, 26, 6, 1); c.line(23, 9, 26, 6, 1); }
+};
+D.mod_lag = (c, v) => {                       /* a jump, smoothed over */
+    const L = 0.3 + v * 7;
+    hline(c, 4, 10, 10); dotted(c, 10, 10, () => 6, 1);
+    curve(c, 10, 28, (x) => 10 - 8 * (1 - Math.exp(-(x - 10) / L)));
+};
+D.mod_aim = (c, v) => {                       /* an arrow into a target, or a target with nothing aimed at it */
+    c.drawCircle(22, 6, 4, 1); px(c, 22, 6);
+    if (v > 0) { hline(c, 4, 16, 6); c.line(13, 3, 16, 6, 1); c.line(13, 9, 16, 6, 1); }
+    else c.line(18, 10, 26, 2, 1);
+};
+D.mod_depth = (c, v) => {                     /* how far, and which way, from the middle */
+    const d = Math.round((v * 2 - 1) * 12);
+    vline(c, 16, 2, 10);
+    if (d) { const x1 = 16 + d, sg = Math.sign(d); hline(c, 16, x1, 5); hline(c, 16, x1, 7); vline(c, x1, 4, 8); px(c, x1 + sg, 6); }
+    dots(c, 4, 28, 11, 3);
+};
+D.gap = () => {};                              /* a blank cell: nothing to see */
+
 /* ------------------------------------------------------------ routing -- */
 function roleOf(key) {
     if (key.startsWith("c_")) return "char";
+    if (key === "mod") return "modsel";
+    const mm = /^mod\d_([a-z]+?)\d?$/.exec(key);
+    if (mm) return mm[1] === "gap" ? "gap" : "mod_" + mm[1];
     if (/^o_(16|513|8|4|223|2|135|113|1)$/.test(key)) return "drawbar";
     if (key === "k_8") return "reg8"; if (key === "k_4") return "reg4"; if (key === "k_2") return "reg2";
     const m = /^[a-z]_(.*)$/.exec(key);
@@ -687,8 +766,21 @@ function roleOf(key) {
 /* Every key in Quilt's contract that has a picture, and what each needs. */
 const RANGE = { volume: [-60, 6], v_crowd: [1, 3], o_16: [0, 8], o_513: [0, 8], o_8: [0, 8], o_4: [0, 8], o_223: [0, 8], o_2: [0, 8], o_135: [0, 8], o_113: [0, 8], o_1: [0, 8] };
 const ENUMS = { a_press: 3, b_press: 3, d_press: 3, v_press: 3, type: 38 };
+/* The Modulation page's enums, by role, as mod.c names them. */
+const OPTS = { modsel: ["1", "2", "3", "4"], mod_kind: ["Velocity", "MPE", "LFO", "Envelope"],
+    mod_shape: ["Sine", "Triangle", "Saw", "Ramp", "Square", "Random", "Drift"], mod_axis: ["Press", "Slide", "Bend"] };
+const BIPOLAR = { mod_rate: 1, mod_depth: 1 };
 
 function norm(key, raw) {
+    const role = roleOf(key);
+    if (role === "gap") return 0;
+    if (role === "mod_aim") { const t = String(raw).trim(); return t === "" ? NaN : t === "None" || t === "0" ? 0 : 1; }
+    if (OPTS[role]) {
+        const o = OPTS[role]; let i = o.indexOf(String(raw));
+        if (i < 0 && String(raw).trim() !== "" && Number.isFinite(Number(raw)) && role !== "modsel") i = Number(raw);
+        return i < 0 ? NaN : i / (o.length - 1);
+    }
+    if (BIPOLAR[role]) { const n = Number(raw); return Number.isFinite(n) && String(raw).trim() !== "" ? (n + 1) / 2 : NaN; }
     if (ENUMS[key]) {
         let i = Number(raw);
         if (!Number.isFinite(i) || String(raw).trim() === "") i = key === "type" ? TYPES.indexOf(String(raw)) : ["Pad", "Auto", "Blend"].indexOf(String(raw));
@@ -710,7 +802,7 @@ function drawCell(ctx, { values, group, nowMs, touched }) {
     const type = typeName(values.type);
     const role = roleOf(key);
     const fn = D[role]; if (!fn) return false;
-    const stepped = role === "drawbar" || role === "press" || role === "crowd" || key === "type";
+    const stepped = role === "drawbar" || role === "press" || role === "crowd" || key === "type" || !!OPTS[role] || role === "mod_aim";
     const v = stepped ? v0 : eased(sid, v0, now);
     noteValue(sid, v0, now);
     awake = !!(touched || (group && group.touched)) || now - lastTurn.get(sid).t < AWAKE_MS;
@@ -743,7 +835,14 @@ const stills = new Map();
  * its centre BEFORE they become pixels: a line stays one pixel, a circle stays
  * round, and the picture sits small in the middle of its cell. */
 const SCALE = 0.8;
+const GLYPH = {
+    0: "111101101101111", 1: "010110010010111", 2: "111001111100111", 3: "111001111001111", 4: "101101111001001",
+    5: "111100111001111", 6: "111100111101111", 7: "111001001001001", 8: "111101111101111", 9: "111101111001111",
+    "/": "001001010100100", ".": "00001", T: "111010010010010", B: "110101110101110", A: "010101111101101",
+    R: "110101110101101", H: "101101111101101", Z: "111001010100111",
+};
 function pen(w, h, k) {
+    const w0 = w;
     const bm = new Uint8Array(w * h);
     const cx = w / 2 - 0.5, cy = h / 2 - 0.5;
     const tx = (x) => Math.round(cx + (x - 15.5) * k), ty = (y) => Math.round(cy + (y - 5.5) * k);
@@ -760,6 +859,17 @@ function pen(w, h, k) {
         drawCircle(x, y, r) { arcVia(raw, tx(x), ty(y), Math.max(1, Math.round(r * k)), 0, 360); },
         fillCircle(x, y, r) { const X = tx(x), Y = ty(y), R = Math.max(1, Math.round(r * k));
             for (let dy = -R; dy <= R; dy++) { const hf = Math.floor(Math.sqrt(R * R - dy * dy)); raw.fillRect(X - hf, Y + dy, 2 * hf + 1, 1); } },
+        /* Words are not scaled: GLYPH's 3x5 figures, centred, from raw row y. */
+        text(str, y) {
+            const w = [...str].reduce((a, ch) => a + (ch === "." ? 2 : 4), 0) - 1;
+            let x = Math.round(w > 0 ? (w0 - w) / 2 : 0);
+            for (const ch of str) {
+                const g = GLYPH[ch]; if (!g) { x += 4; continue; }
+                const gw = ch === "." ? 1 : 3;
+                for (let r = 0; r < 5; r++) for (let i = 0; i < gw; i++) if (g[r * gw + i] === "1") plot(x + i, y + r);
+                x += gw + 1;
+            }
+        },
         runs() {
             const out = [];
             for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {

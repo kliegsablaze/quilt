@@ -1492,11 +1492,16 @@ follow the instrument? **Yes. No fallback is needed.**
 - **What triggers a re-plan.** A write from the grid re-plans only if the key it
   wrote is itself a condition key (`replanIfCondition`). Gates on other keys
   are re-read only after a pad press or a module focus change. So every Quilt
-  gate is on `type`, the key the `TYPE` knob writes. The host documents derived
+  gate is on a key its own knob writes: `type`, and on the Modulation page
+  `mod` and `modN_kind`. The host documents derived
   gates (*The gate does not need a cell*, DR32's `ui_engine`), but they suit
   modes that follow a pad, not a knob.
 - **Limits we must respect:**
-  - **At most four distinct gate keys.** Quilt uses one: `type`.
+  - **Four gate keys are read on a pad press, not more.** The gate lane reads
+    at most four (`MAX_DECLARED_EXTRA_KEYS`) when the grid learns of a change
+    it did not make, and skips the rest. Quilt uses six (`type`, `mod`,
+    `mod1_kind`…`mod4_kind`), all written by their own knobs, which re-plan on
+    the write itself; no pad press moves any of them. echidna-fx uses about 72.
   - **`visible_if` must sit in the hierarchy, not in `chain_params`.** In
     `chain_params` it is silently ignored. `validate.mjs` reports this as
     `visible-if-not-on-level`.
@@ -1559,6 +1564,88 @@ within it `SPEED` is gated `not_equals` the Vibraphone.
 
 The rotor's spin-up and spin-down follow Herrera, Hanson & Abel and are not a
 knob.
+
+### Modulation (`mod1`…`mod4`)
+
+The last page. Four modulators, one shown at a time:
+
+```
+MOD    KIND   (two knobs for the KIND)
+AIM    DEPTH  AIM    DEPTH
+```
+
+`MOD` picks the modulator (1–4), and `KIND` what it follows. Each `KIND` shows
+only the knobs it uses:
+
+| KIND | Knob 3 | Knob 4 | Each note its own? |
+|---|---|---|---|
+| Velocity | — | — | yes |
+| MPE | `AXIS`: pressure, slide (CC74) or pitch bend | `LAG`: smoothing, up to 0.3 s | yes |
+| LFO | `SHAPE`: sine, triangle, saw, ramp, square, random, drift | `RATE` | no, one for all |
+| Envelope | `RISE`: 2 ms to 10 s, while the pad is held | `FALL`: 2 ms to 10 s, after letting go | yes |
+
+`RATE` is either way from the centre. Right of it the LFO runs in time with the
+Move, from 8 bars at the centre to 1/64 at the end (dotted and triplet values
+between), locked to the bar when the transport runs (`get_beat_position`), at
+the tempo when not (`get_bpm`, 120 if the host says nothing). Left of it the LFO
+is free, from a cycle in 50 s at the centre to 20 Hz at the end. The cell writes
+the speed in figures ("1/16", "0.32HZ"), because the header can only show a
+percentage.
+
+The two `AIM`/`DEPTH` pairs send the modulator to two destinations. `DEPTH` is
+either way: at full, the source sweeps the whole of the knob it aims at. The
+destinations are every knob on every other page:
+
+- Main, `TYPE` and `VOL` included.
+- The Instrument and Drawbars pages, by word (`Edge`, `Body`, `8'`…): a word is
+  whichever knob has it on the instrument playing, and nothing on one without it.
+- Effects.
+- Every modulator's own knobs, its own included.
+
+**What modulation never does.** It never writes a knob. Each block, a context's
+offsets are laid over the knobs while it renders, then put back (`mod_apply`,
+`mod_restore`), so every page shows what was set, and a saved sound is the
+setting, not a moment of it.
+
+**Each note, and what they share.** A note renders under its own velocity, MPE
+and envelope, and the shared LFOs. What all notes share renders under the newest
+note's sources: the room, the Leslie, the sympathetic strings, the tonewheels and
+pipes, and `VOL`, which is applied after the engines. A knob an engine reads only
+at the strike (a flute's `EDGE`, a piano's `SOFT`) changes with modulation only
+for new notes; one it reads as it plays (`AIR`, `TONE`, `SPACE`) moves under a held
+note. Main and Effects moves ramp across the block with the knobs' own glide, so a
+fast LFO does not step.
+
+**`TYPE`** is read when a note starts: modulation chooses that note's instrument,
+with that instrument's own settings, and notes already sounding keep theirs. A
+tonewheel or pipe key struck this way is marked `free`, so a later turn of `TYPE`
+does not let go of it.
+
+**A ring cannot run away.** The modulators are worked out in order each block,
+each moved by the others as they stand, so in a ring (1 into 2 into 3 into 4 into
+1) the last link is one block (2.9 ms) late.
+
+**Blank cells.** The host closes up a hidden cell, which would pull the
+destinations up into the top row where a `KIND` has nothing to show. Velocity
+shows two blank cells instead (`modN_gap1`, `modN_gap2`): a one-option enum named
+" ", which the host draws as no label, and whose picture is nothing.
+
+**Gates.** Each modulator is its own level, gated on `mod`, and each of its knobs
+is gated on its own `modN_kind`, so every `KIND` leaves exactly eight cells.
+`tests/plan.test.mjs` checks all sixteen layouts.
+
+**Presets and saved sounds.** A factory preset, or turning `TYPE`, leaves this
+page alone, as it does `VOL`: modulation is how you play the sounds, not part of
+them. A saved sound keeps it (`state`, `"mod1_kind"`…), and one saved before this
+page existed comes back with none. A new modulator starts as one of each kind,
+aimed at nothing.
+
+**MPE input.** A note remembers its MIDI channel. Channel pressure, CC74 and pitch
+bend reach only that channel's notes, so a single-channel controller works as
+before. The Move's pads send per-note pressure.
+
+**Cost.** Eight busy routes with 16 notes cost nothing measurable on the Mac
+(`cost` in the tests).
 
 ### Knob pictures
 

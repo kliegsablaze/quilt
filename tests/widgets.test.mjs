@@ -79,7 +79,8 @@ for (const type of byKey.type.options) {
             let r;
             try { r = draw(k, vals, 1000); } catch (e) { check(false, `${type}: ${k}@${u} throws ${e}`); continue; }
             check(r.clipped === 0, `${type}: ${k}@${u} draws outside its frame (${r.clipped})`);
-            check(r.lit >= 5, `${type}: ${k}@${u} draws a picture (${r.lit} px)`);
+            if (/^mod\d_gap\d$/.test(k)) check(r.lit === 0, `${type}: blank ${k} draws nothing (${r.lit} px)`);
+            else check(r.lit >= 5, `${type}: ${k}@${u} draws a picture (${r.lit} px)`);
             if (r.calls > worstCalls) { worstCalls = r.calls; worstKey = `${type} ${k}@${u}`; }
         }
     }
@@ -118,6 +119,11 @@ draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.7 }, 5000);
 const t4 = draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.7 }, 5300);
 const t5 = draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.7 }, 5450);
 check(t4.px.some((x, i) => x !== t5.px[i]), "the Leslie turns just after its knob is turned");
+
+// RATE says its speed in figures: bars and notes right of centre, hertz left.
+const rateLit = (v) => { ov._reset(); return draw("mod1_rate", { type: "Handpan", mod1_rate: v }, 1000).px; };
+check(rateLit(0.5).some((x, i) => x !== rateLit(0.55)[i]), "RATE's picture changes from 1/2T to 1/4.");
+check(rateLit(-0.5).some((x, i) => x !== rateLit(0.5)[i]), "RATE draws free and in-time speeds differently");
 
 console.log(`  widest cell: ${worstCalls} host calls (${worstKey})`);
 check(worstCalls <= 100, `every cell reaches the host in at most 100 runs, worst ${worstCalls}`);

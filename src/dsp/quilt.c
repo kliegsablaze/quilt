@@ -88,6 +88,7 @@ static void *create_instance(const char *module_dir, const char *json_defaults) 
     if (!q) return NULL;
     for (int i = 0; i < G_COUNT; i++) q->g[i] = QUILT_GLOBALS[i].def;
     for (int i = 0; i < QUILT_NINST; i++) quilt_reset_instrument(q, i);
+    quilt_mod_init(q);
     banks_reset(&q->banks);
     waveguide_bank_reset(&q->symp);
     q->bowbody.inst = -1;
@@ -116,6 +117,7 @@ static void on_midi(void *instance, const uint8_t *msg, int len, int source) {
     quilt_t *q = instance;
     if (len < 2) return;
     uint8_t st = msg[0] & 0xF0;
+    q->midi_chan = msg[0] & 0x0F;   /* MPE gives each note its own channel */
     if (st == 0x90 && len >= 3 && msg[2] > 0) quilt_note_on(q, msg[1], msg[2]);
     else if (st == 0x80 || (st == 0x90 && len >= 3)) quilt_note_off(q, msg[1]);
     else if (st == 0xA0 && len >= 3) quilt_pressure(q, msg[1], msg[2]);   /* the pads */
@@ -123,7 +125,10 @@ static void on_midi(void *instance, const uint8_t *msg, int len, int source) {
     else if (st == 0xB0 && len >= 3) {
         if (msg[1] == 64) q->pedal = msg[2] >= 64;
         else if (msg[1] == 1) q->modwheel = (float)msg[2] / 127.0f;
+        else if (msg[1] == 74) quilt_slide(q, msg[0] & 0x0F, (float)msg[2] / 127.0f);   /* MPE slide */
         else if (msg[1] == 120 || msg[1] == 123) quilt_all_off(q);
+    } else if (st == 0xE0 && len >= 3) {
+        quilt_bend(q, msg[0] & 0x0F, (float)((msg[2] << 7 | msg[1]) - 8192) / 8192.0f);
     }
 }
 
@@ -160,6 +165,15 @@ static void set_param(void *instance, const char *key, const char *val) {
     int g = quilt_global_index(key);
     if (g >= 0) {
         if (quilt_parse_value(&QUILT_GLOBALS[g], val, &f)) q->g[g] = f;
+        return;
+    }
+    if (!strcmp(key, "mod")) {
+        if (quilt_parse_value(&QUILT_MOD_SELECT, val, &f)) q->mod_sel = (int)f;
+        return;
+    }
+    int m, mp = quilt_mod_key(key, &m);
+    if (mp >= 0) {
+        if (quilt_parse_value(&QUILT_MOD_PARAMS[mp], val, &f)) q->mod[m][mp] = f;
         return;
     }
     if (!strncmp(key, "c_", 2)) {
@@ -199,6 +213,11 @@ static int get_param(void *instance, const char *key, char *buf, int buf_len) {
     }
     int g = quilt_global_index(key);
     if (g >= 0) return quilt_format_value(&QUILT_GLOBALS[g], q->g[g], buf, buf_len);
+    if (!strcmp(key, "mod")) return quilt_format_value(&QUILT_MOD_SELECT, (float)q->mod_sel, buf, buf_len);
+    if (!strncmp(key, "mod", 3) && strlen(key) == 9 && !strncmp(key + 4, "_gap", 4))
+        return quilt_format_value(&QUILT_MOD_GAPS[0], 0.0f, buf, buf_len);
+    int m, mp = quilt_mod_key(key, &m);
+    if (mp >= 0) return quilt_format_value(&QUILT_MOD_PARAMS[mp], q->mod[m][mp], buf, buf_len);
     if (!strncmp(key, "c_", 2)) {
         int i = quilt_instrument_by_slug(key + 2, (int)strlen(key + 2));
         if (i >= 0) return snprintf(buf, (size_t)buf_len, "%.4f", (double)q->charv[i]);
@@ -260,7 +279,7 @@ static void render_block(void *instance, int16_t *out, int frames) {
         /* VOL, and the preset's trim gliding about 20 ms to a new preset's. */
         const float t0 = q->trim_g;
         q->trim_g += (powf(10.0f, q->trim / 20.0f) - t0) * (1.0f - expf(-(float)n / (0.02f * QUILT_SR)));
-        const float g0 = volume_gain(q->gs_prev[G_VOLUME]) * t0, g1 = volume_gain(q->gs[G_VOLUME]) * q->trim_g;
+        const float g0 = volume_gain(q->gs_prev[G_VOLUME] + q->vol_d_prev) * t0, g1 = volume_gain(q->gs[G_VOLUME] + q->vol_d) * q->trim_g;
         /* The dither's depth: full above eight steps, none below half of one. */
         float pk = 0.0f;
         for (int i = 0; i < n; i++) pk = fmaxf(pk, fmaxf(fabsf(l[i]), fabsf(r[i])));
@@ -291,6 +310,6 @@ static plugin_api_v2_t api = {
 };
 
 plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *host) {
-    (void)host;
+    quilt_mod_set_host(host);   /* the tempo and the bar, for the LFOs */
     return &api;
 }

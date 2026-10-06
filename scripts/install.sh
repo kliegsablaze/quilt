@@ -30,8 +30,10 @@ ssh "$HOST" "mkdir -p '$REMOTE_DIR'"
 scp -q dist/quilt/dsp.so "$HOST:$REMOTE_DIR/.dsp.so.incoming"
 scp -q dist/quilt/module.json "$HOST:$REMOTE_DIR/.module.json.incoming"
 scp -q dist/quilt/help.json "$HOST:$REMOTE_DIR/.help.json.incoming"
+scp -q dist/quilt/canvas.js "$HOST:$REMOTE_DIR/.canvas.js.incoming"
 ssh "$HOST" "cd '$REMOTE_DIR' && chmod 755 .dsp.so.incoming && \
     mv -f .dsp.so.incoming dsp.so && \
     mv -f .module.json.incoming module.json && \
-    mv -f .help.json.incoming help.json && ls -l"
+    mv -f .help.json.incoming help.json && \
+    mv -f .canvas.js.incoming canvas.js && ls -l"
 echo "Installed to $HOST:$REMOTE_DIR"
