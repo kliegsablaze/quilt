@@ -470,16 +470,22 @@ void modal_note_on(quilt_t *q, voice_t *v, int granted) {
 
         float mass = by_note(note, 4.9e-3f, 2.97e-3f, 2.2e-3f, 1) * r->mass_mult;
         const float K0 = by_note(note, 4e8f, 4.5e9f, 2.3e11f, 1) * r->K_mult;
-        float K = K0 * soft_mult(q);
+        /* The treble's hammers are small and hard, and a strip or a soft
+         * touch must not keep one on its string for longer than the string
+         * takes to swing, or it hardly rings and the push is all that is
+         * heard: softening fades above E4, to a sixth at the top. */
+        const float tw = fminf(1.0f, fmaxf(0.15f, 1.0f - (float)(note - 64) / 30.0f));
+        const float sm = soft_mult(q);
+        float K = K0 * (sm < 1.0f ? powf(sm, tw) : sm);
         float p = by_note(note, 2.3f, 2.5f, 3.0f, 0);
         float z = by_note(note, 2.5f, 1.62f, 0.9f, 1);
         float after = 0.55f, twang = 0.0f;  /* the aftersound's loss, the pickups' tilt */
         float bloom_cents = 0.0f, bloom = 0.0f;
         if (r->ch == CH_FELT) {
             /* FELT: the moderator strip, a much softer, thicker layer in the way. */
-            K *= powf(0.01f, charv);
-            p += 0.5f * charv;
-            mass *= 1.0f + 0.5f * charv;
+            K *= powf(0.01f, charv * tw);
+            p += 0.5f * charv * tw;
+            mass *= 1.0f + 0.5f * charv * tw;
         } else if (r->ch == CH_HUSH) {
             /* HUSH: the soft pedal moves the hammer onto two strings, then one,
              * on unworn felt. The unstruck string sings through the bridge, so
@@ -745,9 +751,22 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
     /* The pickup's gap: BARK and BITE bring the tine or reed nearer. */
     const float gap = r->pickup == PU_MAGNET ? 1.3f - 0.75f * q->charv[v->inst]
                                              : 1.7f - 1.15f * q->charv[v->inst];
+    /* A string pressed aside by a soft hammer follows the hammer's push, a
+     * slow swing below the note that the board hardly radiates; heard
+     * whole it is a thud louder than the note, the more so the softer the
+     * felt. The board hears the string ringing: cut well below the note,
+     * twice, at half its pitch. */
+    const float hp = r->kind == MK_STRING && r->pickup == PU_NONE ? expf(-TWO_PI * 0.5f * m->f0 / QUILT_SR) : 0.0f;
     float peak = 0.0f;
     for (int n = 0; n < frames; n++) {
         float y = acc[n][0] + acc[n][1] + acc[n][2] + acc[n][3];
+        if (hp > 0.0f) {
+            m->hp_y1 = hp * (m->hp_y1 + y - m->hp_x1);
+            m->hp_x1 = y;
+            m->hp_y2 = hp * (m->hp_y2 + m->hp_y1 - m->hp_x2);
+            m->hp_x2 = m->hp_y1;
+            y = m->hp_y2;
+        }
         if (r->pickup != PU_NONE) {
             float o = pickup(r->pickup, y * m->pu_norm, gap);
             y = (o - m->pu_prev) * m->pu_comp;

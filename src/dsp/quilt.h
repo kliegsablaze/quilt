@@ -175,6 +175,7 @@ typedef struct {
     tint_t thump_t, hiss_t; /* the knock's and the damper's colour */
     float buzz_z, buzz_z2;  /* the kalimba's buzzers */
     float pu_norm, pu_comp, pu_prev;   /* the tine or reed pickup */
+    float hp_x1, hp_y1, hp_x2, hp_y2;  /* the board's low cut, strings */
     float held_t, roll_t, roll_vel;
     int roll_flip;
     uint32_t rng;
@@ -275,7 +276,7 @@ typedef struct {
     float cav_c, cav_r2, cav_g, cav_y1, cav_y2;   /* the vessel, or the reed chamber */
     float ph[2], inc[2], swing, speak_k, rank2;   /* the free reed and its céleste */
     float env, att_k, rel_k, lvl, press_s, onset, chiff;
-    float nz_lp, vib_ph, t, level, pan_l, pan_r, jlp, jk, js, jamp, offset, jet_mul, noise_out, flow_lp, soft_k, jet_th, comp, rlp2, surge, fc, over, soft_eff, edge, charv;
+    float nz_lp, vib_ph, t, level, pan_l, pan_r, jlp, jk, js, jamp, offset, jet_mul, noise_out, flow_lp, soft_k, jet_th, comp, rlp2, surge, fc, over, soft_eff, edge, charv, yamp;
     tint_t nz_t, chiff_t;
     float Db_was, Dj_was, comp_was, y0_was, jg_was, soft_k_was;   /* what the last block ended on */
     uint32_t rng;

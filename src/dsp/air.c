@@ -448,8 +448,13 @@ void air_render(quilt_t *q, voice_t *v, float *left, float *right, int frames) {
             y = (c * 2.0f + (flow - a->dcy) * 0.3f) * 5.0f;
         }
 
-        /* AIR: the breath itself, heard beside the note. */
-        y += tint(&a->nz_t, nz) * air_heard * breath * a->noise_out;
+        /* AIR: the breath itself. It is the jet or the reed cutting the
+         * air, so it comes in pulses with the note's own swing, loudest
+         * where the wave is, not a steady hiss laid over it: that is what
+         * makes it part of the tone. As loud on average as a steady hiss. */
+        a->yamp += (fabsf(y) - a->yamp) * 0.002f;
+        const float pulse = fminf(1.5f, fabsf(y) / (1.57f * a->yamp + 1e-9f));
+        y += tint(&a->nz_t, nz) * air_heard * breath * a->noise_out * (0.28f + 1.12f * pulse);
         /* PUFF: the chiff, edge noise as the pipe speaks. */
         if (a->chiff > 1e-4f) {
             y += tint(&a->chiff_t, nz) * a->chiff * p * 4.0f;
