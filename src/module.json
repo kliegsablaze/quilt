@@ -12,6 +12,7 @@
     "midi_in": true,
     "chainable": true,
     "aftertouch": true,
-    "component_type": "sound_generator"
+    "component_type": "sound_generator",
+    "canvas_script": "canvas.js"
   }
 }

@@ -40,21 +40,35 @@ static void sb_printf(sb_t *b, const char *fmt, ...) {
     }
 }
 
+/* Every control draws its own picture (src/canvas.js, DESIGN.md Knob
+ * pictures). The ones whose picture depends on the instrument also read TYPE,
+ * and SWAY reads SPEED, so a page that has no cell for them still knows. */
+static void viz_json(sb_t *b, const char *key) {
+    static const char *const BY_TYPE[] = { "soft", "decay", "m_spot", "m_body", "p_spot", "p_body" };
+    sb_printf(b, ",\"viz\":{\"kind\":\"custom:quilt\"");
+    if (!strcmp(key, "sway")) sb_printf(b, ",\"extra_keys\":[\"type\",\"speed\"]");
+    for (size_t i = 0; i < sizeof(BY_TYPE) / sizeof(BY_TYPE[0]); i++)
+        if (!strcmp(key, BY_TYPE[i])) sb_printf(b, ",\"extra_keys\":[\"type\"]");
+    sb_printf(b, "}");
+}
+
 static void param_json(sb_t *b, const param_def_t *d) {
     sb_printf(b, "{\"key\":\"%s\",\"name\":\"%s\",\"short_name\":\"%s\",", d->key, d->name, d->cell);
     if (d->kind == PK_ENUM) {
         sb_printf(b, "\"type\":\"enum\",\"options\":[");
         for (int i = 0; i < d->noptions; i++)
             sb_printf(b, "%s\"%s\"", i ? "," : "", d->options[i]);
-        sb_printf(b, "],\"options_as_string\":true}");
+        sb_printf(b, "],\"options_as_string\":true");
     } else if (d->kind == PK_INT) {
-        sb_printf(b, "\"type\":\"int\",\"min\":%d,\"max\":%d}", (int)d->min, (int)d->max);
+        sb_printf(b, "\"type\":\"int\",\"min\":%d,\"max\":%d", (int)d->min, (int)d->max);
     } else if (d->unit) {
-        sb_printf(b, "\"type\":\"float\",\"min\":%g,\"max\":%g,\"step\":0.5,\"unit\":\"%s\"}",
+        sb_printf(b, "\"type\":\"float\",\"min\":%g,\"max\":%g,\"step\":0.5,\"unit\":\"%s\"",
                   (double)d->min, (double)d->max, d->unit);
     } else {
-        sb_printf(b, "\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01,\"unit\":\"%%\"}");
+        sb_printf(b, "\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01,\"unit\":\"%%\"");
     }
+    viz_json(b, d->key);
+    sb_printf(b, "}");
 }
 
 static void gate(sb_t *b, const char *type_name) {

@@ -19,7 +19,7 @@ else
 fi
 
 # help.json is what puts "Module Help" one jog from the controls.
-cp src/module.json src/help.json dist/quilt/
+cp src/module.json src/help.json src/canvas.js dist/quilt/
 cp LICENSE THIRD_PARTY_LICENSES.md dist/quilt/
 echo "Built dist/quilt/"
 

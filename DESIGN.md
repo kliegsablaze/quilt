@@ -1527,6 +1527,55 @@ within it `SPEED` is gated `not_equals` the Vibraphone.
 The rotor's spin-up and spin-down follow Herrera, Hanson & Abel and are not a
 knob.
 
+### Knob pictures
+
+Every cell draws a picture of what its knob does in place of Schwung's dial,
+from `src/canvas.js`. Each param in `chain_params` names the one kind,
+`viz: {kind: "custom:quilt"}`, and `module.json` declares `canvas_script`, so
+Schwung (1.7.3 and later) loads the file and hands each cell a 32×15 frame. An
+older host, Movy, or a picture that throws draws the built-in dial instead, so
+nothing here can leave a cell blank.
+
+The pictures follow the instrument. SOFT is a hammer whose felt thickens on a
+piano, a mallet head on a marimba, a pick turning into a fingertip on a harp,
+bow weight on a cello, an air jet on a flute, and fewer bright drawbars on the
+organ. SOFT, DECAY, SWAY and the shared SPOT and BODY keys read `type` through
+`extra_keys`, and SWAY reads `speed` too, so a page without those cells still
+knows. Every CHAR key has its own picture. The drawbars are drawn as a
+Hammond's: the subs hatched like its brown bars, the octaves hollow like its
+white ones, the other harmonics with a solid centre like its black ones.
+
+Three rules make them one set:
+
+- **The seam.** A light running stitch along the foot of every picture, sewn
+  closer up to the value, with a one-pixel needle where it stops. TONE's sews
+  out from the middle. The seam shows any knob's value the same way, so the
+  picture above it is free to explain.
+- **One pen.** Everything is a one-pixel line. What rings is a plain line, what
+  plays it an outline, and sound is dotted. Solid fills read as blocks at this
+  size, and were thinned out on the first look.
+- **Motion means time.** Only the controls that are about time or movement
+  move: SWAY, SPEED, SLOW, FAST, MOTOR, the beating and chorus CHARs, BOW,
+  ROLL, AIR, NOISE, SPLIT, DECAY and SWELL. They move while the knob is touched,
+  as asked. The host passes no touch to a picture yet, so for now they move
+  while the knob turns and for 1.5 s after. The file already reads a
+  `touched` flag in case the host adds one. Every other value eases to a new
+  one in 140 ms.
+
+No card pops up while a knob is held. That was offered and declined.
+
+A still picture is drawn once into a bitmap and replayed as horizontal runs,
+so a page that is not moving costs at most 86 host calls a cell and no maths.
+Only the cell being turned is redrawn each frame. Measured in Node with the JIT
+off, which is closer to QuickJS: a worst-case still page takes 0.19 ms to draw,
+and 2.3 ms with all eight cells moving at once.
+
+`tests/widgets.test.mjs` loads the file the way the host does and draws every
+key of every instrument through the host's own frame and viz resolver. It
+checks that each cell resolves to the picture and draws inside its frame, that
+an unanswered value draws only the seam, that a still picture replays
+exactly, and that the Leslie holds still until touched or turned.
+
 ## Will it fit
 
 Each block is 128 frames at 44.1 kHz, about 2.9 ms, on a CM4 (Cortex-A72 with

@@ -84,7 +84,8 @@ for (const [k, l] of Object.entries(hierarchy.levels)) {
     check(w <= pageRoom, `page "${l.label}" (${k}) is ${w} px, the header has ${pageRoom}`);
 }
 
-const { findings } = validateContract({ id: "quilt", hierarchy, chainParams, capabilities: {} });
+const { findings } = validateContract({ id: "quilt", hierarchy, chainParams, capabilities: JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../src/module.json"), "utf8")).capabilities });
+check(!findings.some((f) => f.rule === "custom-widget-no-script"), "canvas.js is declared for the knob pictures");
 for (const f of findings) if (f.level !== "info") console.log(`  validate ${f.level}: ${f.rule} — ${f.message}`);
 check(!findings.some((f) => f.level === "error"), "the host's validator reports no errors");
 
