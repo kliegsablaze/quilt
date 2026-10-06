@@ -25,43 +25,43 @@ static const struct {
 } PRESETS[] = {
     /* Keys */
     { "Felt Upright", {
-        /* The strip lifted out: the same close upright, hammers bare. */
-        { "Upright Bare Hammer", "char=0.05 soft=0.45 m_noise=0.4 tone=0.5 trim=0.5" },
-        /* A thick strip, the pedal half down, the room a little larger. */
-        { "Felt Lullaby", "char=0.7 soft=0.7 m_pedal=0.35 decay=0.6 space=0.26 size=0.5 dark=0.6 trim=2.2" } } },
+        /* The strip lifted out: bare hammers, played out, dry and close. */
+        { "Upright Bare Hammer", "char=0 soft=0.3 tone=0.62 m_stiff=0.5 m_noise=0.3 m_damp=0.55 decay=0.4 space=0.05 trim=4.0" },
+        /* A thick strip, the pedal down, the action near, a darker room. */
+        { "Felt Lullaby", "char=0.8 soft=0.8 tone=0.42 m_pedal=0.4 m_noise=0.6 decay=0.7 space=0.3 size=0.6 dark=0.65 trim=1.3" } } },
     { "Una Corda Grand", {
-        /* The soft pedal up: all three strings, the lid open, nearer. */
-        { "Grand Open Lid", "char=0.05 soft=0.42 m_noise=0.3 space=0.22 size=0.55 trim=2.5" },
+        /* The soft pedal up: all three strings, the lid open, near and bright. */
+        { "Grand Open Lid", "char=0 soft=0.38 tone=0.58 m_spot=0.1 m_stiff=0.5 m_noise=0.35 space=0.08 size=0.4 trim=7.1" },
         /* Further back in the hall, the sustain pedal half down. */
         { "Grand Far Hall", "char=0.6 m_pedal=0.45 space=0.42 size=0.8 delay=0.4 dark=0.55 trim=-2.6" } } },
     { "Electric Grand", {
-        /* Played out, pickups near the bridge, no pan. */
-        { "E.Grand Bright", "char=0.6 soft=0.4 sway=0 tone=0.58 trim=-0.7" },
-        /* Softly, with a slow wide auto-pan and more room. */
-        { "E.Grand Drift", "char=0.2 soft=0.65 sway=0.5 speed=0.18 space=0.3 trim=0.5" } } },
+        /* Played out, pickups near the bridge, no pan, the amp pushed, dry. */
+        { "E.Grand Bright", "char=0.75 soft=0.35 tone=0.62 sway=0 m_damp=0.5 drive=0.3 decay=0.4 space=0.06 trim=-1.9" },
+        /* Softly, the pedal half down, a slow wide auto-pan, more room. */
+        { "E.Grand Drift", "char=0.15 soft=0.7 tone=0.45 sway=0.6 speed=0.15 m_pedal=0.4 space=0.3 size=0.6 trim=0.2" } } },
     { "Clavichord", {
         /* The lute stop: cloth on the strings, short and plucked. */
         { "Clavichord Lute", "p_damp=0.85 p_edge=0.4 char=0.3 decay=0.3 trim=1.9" },
         /* Bebung deep, so pressing a held key sings and wavers. */
         { "Clavichord Bebung", "char=0.9 p_damp=0.35 decay=0.5 space=0.2 trim=-1.4" } } },
     { "Tine Piano", {
-        /* Tines voiced away from the pickups: round and bell-like. */
-        { "Tine Piano Bell", "char=0.1 soft=0.68 m_split=0.15 sway=0.2 trim=0.3" },
-        /* Voiced close, played harder, the amplifier pushed. */
-        { "Tine Piano Bark", "char=0.8 soft=0.45 drive=0.3 sway=0.15 trim=-1.7" } } },
+        /* Tines voiced away from the pickups, a wide slow vibrato, the pedal down. */
+        { "Tine Piano Bell", "char=0.05 soft=0.75 tone=0.45 m_split=0.2 sway=0.5 speed=0.25 m_pedal=0.3 space=0.25 trim=-0.3" },
+        /* Voiced close, played hard, the amplifier pushed, no vibrato, dry. */
+        { "Tine Piano Bark", "char=0.9 soft=0.3 tone=0.6 drive=0.45 sway=0 m_damp=0.5 decay=0.4 space=0.06 trim=-0.8" } } },
     { "Reed Piano", {
-        /* A wide pickup gap and no tremolo: sweet and clean. */
-        { "Reed Piano Sweet", "char=0.2 soft=0.7 sway=0 drive=0.05 trim=0.4" },
-        /* The tremolo up and quicker, the reeds biting. */
-        { "Reed Piano Tremolo", "char=0.6 sway=0.6 speed=0.55 drive=0.2 trim=1.0" } } },
+        /* A wide pickup gap, no tremolo, the pedal half down, a little room. */
+        { "Reed Piano Sweet", "char=0.15 soft=0.75 tone=0.45 sway=0 drive=0 m_pedal=0.35 space=0.22 size=0.5 trim=-0.7" },
+        /* The tremolo deep and quick, the reeds biting, the amp warm. */
+        { "Reed Piano Tremolo", "char=0.7 soft=0.4 tone=0.58 sway=0.8 speed=0.6 drive=0.35 m_damp=0.5 trim=2.3" } } },
     { "Celesta", {
-        /* Harder hammers, more of the bell. */
-        { "Celesta Bright", "char=0.7 soft=0.45 tone=0.55 trim=1.7" },
+        /* Harder hammers, more of the bell, short and dry. */
+        { "Celesta Bright", "char=0.8 soft=0.35 tone=0.62 m_damp=0.55 decay=0.4 space=0.06 trim=2.7" },
         /* Soft, the pedal half down, a large room. */
         { "Celesta Dream", "char=0.3 soft=0.7 m_pedal=0.5 space=0.45 size=0.75 delay=0.3 trim=-1.1" } } },
     { "Toy Piano", {
-        /* Rods well out of tune with each other, very clangy. */
-        { "Toy Piano Broken", "m_split=0.45 char=0.75 trim=0.4" },
+        /* Rods well out of tune with each other, struck hard, very clangy. */
+        { "Toy Piano Broken", "m_split=0.6 char=0.9 soft=0.3 m_spot=0.4 tone=0.6 drive=0.2 trim=-2.2" },
         /* Played gently in a bedroom. */
         { "Toy Piano Lullaby", "soft=0.65 char=0.3 space=0.32 size=0.45 trim=-0.5" } } },
     { "Tonewheel Organ", {
@@ -70,45 +70,45 @@ static const struct {
         /* 00 8000 000 with third percussion, scanner off: jazz. */
         { "Organ Jazz Perc", "o_8=8 o_4=0 o_ping=0.7 o_tail=0.3 o_click=0.45 char=0 sway=0 trim=1.2" } } },
     { "Flute Organ", {
-        /* The stopped 8' alone, quiet and hollow. */
-        { "Flute Organ Gedackt", "k_8=0.9 k_4=0 k_2=0 char=0.3 k_edge=0.15 trim=1.8" } ,
-        /* 8', 4' and 2' drawn: the small plenum. */
-        { "Flute Organ Full", "k_8=0.7 k_4=0.6 k_2=0.5 char=0.55 k_edge=0.4 trim=2.0" } } },
+        /* The stopped 8' alone, no tremulant, in a bigger chapel. */
+        { "Flute Organ Gedackt", "k_8=1 k_4=0 k_2=0 char=0.2 k_edge=0.05 tone=0.4 sway=0 space=0.25 size=0.8 trim=-3.7" } ,
+        /* 8', 4' and 2' drawn, more chiff, no tremulant: the small plenum. */
+        { "Flute Organ Full", "k_8=0.7 k_4=0.7 k_2=0.6 char=0.6 k_edge=0.5 tone=0.58 sway=0 space=0.12 trim=0.1" } } },
     { "Harmonium", {
-        /* The céleste rank fully in: a slow beating shimmer. */
-        { "Harmonium Celeste", "char=0.85 trim=0.6" },
+        /* The celeste rank fully in, the reeds close and quick to speak. */
+        { "Harmonium Celeste", "char=0.9 a_swell=0.1 a_edge=0.6 tone=0.58 space=0.06 trim=2.6" },
         /* Further off, breathier, swelling slowly. */
         { "Harmonium Distant", "char=0.25 a_air=0.32 a_swell=0.5 space=0.38 size=0.7 trim=-1.9" } } },
     { "Glass E.Piano", {
-        /* More of the bell pair, played a little harder. */
-        { "Glass EP Bell", "char=0.7 f_tine=0.55 soft=0.5 trim=1.5" },
-        /* Soft, little tine, the chorus wider. */
-        { "Glass EP Soft", "char=0.15 soft=0.75 f_tine=0.3 sway=0.35 trim=2.6" } } },
+        /* More of the bell pair, played harder, no chorus, ringing longer. */
+        { "Glass EP Bell", "char=0.75 f_tine=0.8 soft=0.4 tone=0.6 sway=0 decay=0.65 trim=0.4" },
+        /* Soft, little tine, the chorus wide and slow, more room. */
+        { "Glass EP Soft", "char=0.1 soft=0.8 f_tine=0.2 tone=0.42 sway=0.6 speed=0.2 space=0.25 size=0.6 trim=1.3" } } },
     { "String Ensemble", {
-        /* The 8' alone, darker: cellos and violas. */
-        { "Ensemble Low", "k_8=0.9 k_4=0.2 k_2=0 k_edge=0.2 k_swell=0.55 trim=2.8" },
-        /* The 4' and 2' over the 8': the violins on top. */
-        { "Ensemble High", "k_8=0.45 k_4=0.8 k_2=0.35 k_edge=0.4 trim=2.5" } } },
+        /* The 8' alone, darker and slower: cellos and violas. */
+        { "Ensemble Low", "k_8=1 k_4=0 k_2=0 k_edge=0.1 k_swell=0.7 tone=0.42 char=0.5 trim=0.5" },
+        /* The 4' and 2' over the 8', quicker and brighter: the violins on top. */
+        { "Ensemble High", "k_8=0.3 k_4=0.9 k_2=0.6 k_edge=0.55 k_swell=0.25 tone=0.58 char=0.9 trim=-1.6" } } },
 
     /* Mallets */
     { "Vibraphone", {
-        /* The fan stopped: a pure ring. */
-        { "Vibes Motor Off", "sway=0 m_damp=0.2 trim=-0.1" },
-        /* The fan fast and deep, the old ballroom shimmer. */
-        { "Vibes Fast Motor", "char=0.7 sway=0.6 trim=2.6" } } },
+        /* The fan stopped, harder mallets, the bars damped: dry jazz vibes. */
+        { "Vibes Motor Off", "sway=0 soft=0.35 tone=0.55 m_damp=0.5 decay=0.45 space=0.06 trim=1.6" },
+        /* The fan fast and deep, soft mallets, the pedal down: the old ballroom. */
+        { "Vibes Fast Motor", "char=0.75 sway=0.8 soft=0.7 m_pedal=0.4 decay=0.7 space=0.3 size=0.7 trim=0.9" } } },
     { "Marimba", {
         /* Held notes roll; press to roll faster. */
         { "Marimba Roll", "char=0.6 trim=-5.9" },
-        /* Harder mallets, a wooden attack. */
-        { "Marimba Hard Mallet", "soft=0.3 m_noise=0.4 trim=0.6" } } },
+        /* Hard mallets nearer the edge, a wooden attack, dry. */
+        { "Marimba Hard Mallet", "soft=0.2 tone=0.6 m_noise=0.5 m_spot=0.3 decay=0.4 space=0.05 trim=3.3" } } },
     { "Xylophone", {
-        /* Hard plastic mallets, bright and short. */
-        { "Xylophone Hard", "soft=0.35 tone=0.55 trim=0.3" },
+        /* Hard plastic mallets, bright and short, a small room. */
+        { "Xylophone Hard", "soft=0.2 tone=0.65 m_spot=0.25 drive=0.1 space=0.05 size=0.3 trim=-0.2" },
         /* Held notes roll. */
         { "Xylophone Roll", "char=0.6 trim=-5.9" } } },
     { "Glockenspiel", {
-        /* Brass mallets: the bell and the attack. */
-        { "Glock Brass Mallets", "soft=0.45 char=0.55 trim=-0.3" },
+        /* Brass mallets: the bell and the attack, damped quicker, close. */
+        { "Glock Brass Mallets", "soft=0.3 char=0.7 tone=0.6 m_damp=0.3 decay=0.4 space=0.08 size=0.4 trim=-0.4" },
         /* Soft mallets far down the hall. */
         { "Glock Far Away", "soft=0.8 space=0.45 size=0.8 delay=0.35 trim=-0.4" } } },
     { "Tubular Bells", {
@@ -117,106 +117,106 @@ static const struct {
         /* Up in the cathedral's tower. */
         { "Chimes Cathedral", "space=0.5 size=0.9 delay=0.4 trim=-3.8" } } },
     { "Handbells", {
-        /* The tierce out: a bright major ring. */
-        { "Handbells Major", "char=0 trim=2.6" },
+        /* The tierce out: a bright major ring, close, the hand on the bell. */
+        { "Handbells Major", "char=0 soft=0.4 tone=0.58 m_split=0.05 m_damp=0.3 decay=0.45 space=0.08 size=0.45 trim=4.0" },
         /* The tierce in fully, a big church. */
         { "Handbells Minor", "char=1 space=0.45 size=0.8 trim=-3.2" } } },
     { "Handpan", {
-        /* The note fields alone, little overtone ring. */
-        { "Handpan Pure", "char=0.2 trim=2.7" },
+        /* The note fields alone, a muted hand, close and warm. */
+        { "Handpan Pure", "char=0.1 soft=0.75 tone=0.45 m_damp=0.35 m_body=0.75 space=0.06 trim=2.8" },
         /* The harmonics singing, a larger room. */
         { "Handpan Shimmer", "char=0.85 space=0.42 trim=-3.9" } } },
     { "Tongue Drum", {
-        /* A pure tongue, the box quiet. */
-        { "Tongue Drum Pure", "char=0.15 trim=1.0" },
+        /* A pure tongue under a resting hand, short and dry. */
+        { "Tongue Drum Pure", "char=0 soft=0.75 tone=0.45 m_damp=0.4 decay=0.4 space=0.05 trim=1.8" },
         /* The tongues ringing on with their harmonic. */
         { "Tongue Drum Ring", "char=0.85 decay=0.65 trim=-0.8" } } },
     { "Kalimba / Music Box", {
-        /* Buzzers off, a steel comb: the music box. */
-        { "Music Box", "char=0 soft=0.7 trim=0.9" },
+        /* Buzzers off, a little steel comb on a box, tinny and ringing. */
+        { "Music Box", "char=0 soft=0.4 tone=0.62 m_spot=0.6 m_body=0.3 decay=0.7 space=0.2 size=0.4 trim=1.6" },
         /* The bottle-cap buzzers rattling. */
         { "Kalimba Buzz", "char=1 trim=0.8" } } },
 
     /* Strings */
     { "Harp", {
-        /* Close, with little of the hall. */
-        { "Harp Close", "char=0.2 space=0.15 size=0.4 trim=5.9" },
+        /* Close and dry, plucked firmly near the edge, the hand muting. */
+        { "Harp Close", "char=0.2 soft=0.4 tone=0.56 p_edge=0.6 p_damp=0.3 space=0.04 size=0.3 trim=6.6" },
         /* A small lever harp: lighter body, plucked nearer the end. */
         { "Lever Harp", "p_body=0.4 p_spot=0.2 p_edge=0.55 p_damp=0.2 decay=0.55 trim=6.8" } } },
     { "Nylon Guitar", {
-        /* Over the fingerboard with the flesh of the thumb. */
-        { "Nylon Warm", "p_spot=0.4 p_edge=0.1 soft=0.7 trim=-0.2" },
-        /* Near the bridge with the nail. */
-        { "Nylon Bright", "p_spot=0.12 p_edge=0.45 soft=0.45 trim=0.8" } } },
+        /* Over the fingerboard with the flesh of the thumb, the strings muted. */
+        { "Nylon Warm", "p_spot=0.6 p_edge=0 soft=0.9 tone=0.38 p_damp=0.45 decay=0.4 space=0.15 trim=-1.6" },
+        /* Near the bridge with the nail, the open strings ringing, dry. */
+        { "Nylon Bright", "p_spot=0.08 p_edge=0.6 soft=0.35 tone=0.6 char=0.6 space=0.06 trim=-1.4" } } },
     { "Hammered Dulcimer", {
-        /* Padded hammers. */
-        { "Dulcimer Soft", "soft=0.8 char=0.4 trim=1.1" },
-        /* Bare hammers, the strings blooming. */
-        { "Dulcimer Bright", "soft=0.4 char=0.75 trim=0.9" } } },
+        /* Padded hammers, the courses in tune, the strings damped a little. */
+        { "Dulcimer Soft", "soft=0.85 char=0.3 tone=0.42 m_split=0.2 m_damp=0.35 space=0.2 trim=-0.8" },
+        /* Bare hammers near the bridge, the courses apart, the strings blooming. */
+        { "Dulcimer Bright", "soft=0.3 char=0.85 tone=0.6 m_split=0.5 m_spot=0.08 space=0.06 trim=3.4" } } },
     { "Pizzicato", {
         /* Violas, short and light. */
         { "Pizz Violas", "char=0.15 decay=0.55 trim=3.3" },
         /* Cellos, round and long. */
         { "Pizz Cellos", "char=0.95 trim=-0.3" } } },
     { "Solo Cello", {
-        /* The bow holds the note by itself; no pressing needed. */
-        { "Cello Auto Bow", "b_press=1 trim=1.9" },
+        /* The bow holds the note by itself, swelling slowly, far back and dark. */
+        { "Cello Auto Bow", "b_press=1 b_swell=0.6 char=0.85 tone=0.42 b_bite=0.15 space=0.3 size=0.7 trim=5.8" },
         /* Near the bridge: glassy and thin. */
         { "Cello Ponticello", "char=0.05 b_edge=0.55 b_noise=0.25 trim=-2.1" } } },
     { "Solo Violin", {
-        /* The bow holds the note by itself. */
-        { "Violin Auto Bow", "b_press=1 trim=1.8" },
+        /* The bow holds the note by itself, swelling slowly, in a hall. */
+        { "Violin Auto Bow", "b_press=1 b_swell=0.6 char=0.6 tone=0.45 b_bite=0.1 space=0.3 size=0.7 trim=-1.5" },
         /* Over the fingerboard: flautando. */
         { "Violin Sul Tasto", "char=0.85 b_edge=0.3 trim=8.3" } } },
     { "String Section", {
-        /* The bow holds the note by itself. */
-        { "Strings Auto Bow", "b_press=1 trim=2.8" },
-        /* A few players close up, a smaller room. */
-        { "Strings Close", "char=0.25 space=0.25 size=0.45 trim=2.3" } } },
+        /* The bow holds the note by itself, a slow swell, a big hall. */
+        { "Strings Auto Bow", "b_press=1 b_swell=0.7 char=0.7 tone=0.42 space=0.35 size=0.85 trim=0.9" },
+        /* A few players close up, biting near the bridge, a small room. */
+        { "Strings Close", "char=0.2 b_bite=0.5 b_edge=0.6 b_swell=0.1 tone=0.56 space=0.05 size=0.35 trim=4.5" } } },
 
     /* Glass and bowls */
     { "Bowed Vibes", {
-        /* The bow holds the bar by itself. */
-        { "Bowed Vibes Auto", "d_press=1 trim=2.4" },
-        /* A mallet tap under the bow. */
-        { "Bowed Vibes Struck", "d_hit=0.8 trim=2.4" } } },
+        /* The bow holds the bar by itself, slowly, the motor turning. */
+        { "Bowed Vibes Auto", "d_press=1 d_swell=0.7 d_blur=0.4 sway=0.4 space=0.3 trim=3.9" },
+        /* A mallet tap under a quick bow, the bar damped sooner, close. */
+        { "Bowed Vibes Struck", "d_hit=0.8 d_swell=0.1 d_noise=0.05 decay=0.3 space=0.12 trim=2.3" } } },
     { "Glass Harmonica", {
-        /* The glasses sing by themselves. */
-        { "Glass Harmonica Auto", "d_press=1 trim=2.5" },
-        /* A drier finger: more grain. */
-        { "Glass Harmonica Dry", "char=0.15 d_noise=0.2 trim=4.1" } } },
+        /* The glasses sing by themselves, slowly, wavering in a big room. */
+        { "Glass Harmonica Auto", "d_press=1 d_swell=0.65 d_blur=0.3 sway=0.35 space=0.35 size=0.85 trim=1.4" },
+        /* A drier finger, quick to speak: more grain, close. */
+        { "Glass Harmonica Dry", "char=0.1 d_noise=0.45 d_swell=0.1 d_blur=0 tone=0.56 space=0.06 size=0.35 trim=5.3" } } },
     { "Singing Bowl", {
-        /* Struck only, left to ring. */
-        { "Singing Bowl Struck", "d_hit=1 d_bow=0.15 trim=6.4" },
-        /* Rubbed by itself, no pressing needed. */
-        { "Singing Bowl Auto", "d_press=1 trim=3.3" } } },
+        /* Struck only, clear, left to ring long. */
+        { "Singing Bowl Struck", "d_hit=1 d_bow=0 d_swell=0 d_blur=0 d_noise=0 decay=0.65 tone=0.56 space=0.2 trim=8.9" },
+        /* Rubbed by itself, slowly, the rim grainy and wavering. */
+        { "Singing Bowl Auto", "d_press=1 d_swell=0.65 d_blur=0.6 d_noise=0.4 sway=0.5 tone=0.42 size=0.85 space=0.3 trim=1.1" } } },
 
     /* Breath and voice */
     { "Flute", {
-        /* The breath holds the note by itself. */
-        { "Flute Auto Breath", "a_press=1 trim=2.0" },
-        /* Lots of air, the lip open. */
-        { "Flute Breathy", "a_air=0.4 char=0.15 trim=0.0" } } },
+        /* The breath holds the note by itself, swelling slowly, in a hall. */
+        { "Flute Auto Breath", "a_press=1 a_swell=0.45 tone=0.45 space=0.3 size=0.75 trim=-0.5" },
+        /* Lots of air, the lip open, quick to speak, close. */
+        { "Flute Breathy", "a_air=0.6 char=0.1 a_edge=0.2 a_swell=0.05 tone=0.55 space=0.06 trim=5.1" } } },
     { "Pan Flute", {
-        /* The breath holds the note by itself. */
-        { "Pan Flute Auto", "a_press=1 trim=2.4" },
-        /* Lots of air and puff. */
-        { "Pan Flute Breathy", "a_air=0.45 char=0.85 a_edge=0.3 trim=2.3" } } },
+        /* The breath holds the note by itself, swelling slowly, far off. */
+        { "Pan Flute Auto", "a_press=1 a_swell=0.6 tone=0.45 space=0.3 size=0.8 trim=-0.3" },
+        /* Lots of air and puff, close. */
+        { "Pan Flute Breathy", "a_air=0.7 char=0.9 a_edge=0.2 space=0.08 trim=2.3" } } },
     { "Ocarina", {
-        /* The breath holds the note by itself. */
-        { "Ocarina Auto", "a_press=1 trim=2.5" },
-        /* Breathier, less pure. */
-        { "Ocarina Breathy", "char=0.2 a_air=0.34 trim=2.1" } } },
+        /* The breath holds the note by itself, swelling slowly, a dark room. */
+        { "Ocarina Auto", "a_press=1 a_swell=0.35 space=0.3 size=0.75 dark=0.6 trim=-0.6" },
+        /* Breathier and brighter, less pure, close. */
+        { "Ocarina Breathy", "char=0.1 a_air=0.6 a_edge=0.7 tone=0.56 space=0.06 trim=-0.5" } } },
     { "Recorder", {
-        /* The breath holds the note by itself. */
-        { "Recorder Auto", "a_press=1 trim=2.0" },
-        /* A brighter, chiffier voice flute. */
-        { "Recorder Bright", "char=0.65 a_edge=0.6 trim=-1.9" } } },
+        /* The breath holds the note by itself, swelling slowly, in a hall. */
+        { "Recorder Auto", "a_press=1 a_swell=0.4 tone=0.45 space=0.3 size=0.75 trim=-1.3" },
+        /* A brighter, chiffier voice flute, quick and close. */
+        { "Recorder Bright", "char=0.9 a_edge=0.85 a_air=0.4 a_swell=0 tone=0.6 space=0.06 trim=-3.0" } } },
     { "Clarinet", {
-        /* The breath holds the note by itself. */
-        { "Clarinet Auto", "a_press=1 trim=1.8" },
-        /* A harder reed, the clarion's edge. */
-        { "Clarinet Bright", "char=0.65 a_edge=0.55 trim=1.6" } } },
+        /* The breath holds the note by itself, a soft reed swelling slowly, far. */
+        { "Clarinet Auto", "a_press=1 a_swell=0.6 char=0.1 tone=0.42 space=0.3 size=0.7 trim=-0.7" },
+        /* A harder reed, the clarion's edge, close. */
+        { "Clarinet Bright", "char=0.8 a_edge=0.85 a_air=0.35 tone=0.6 space=0.06 trim=4.4" } } },
     { "Choir", {
         /* The choir on ah. */
         { "Choir Ah", "char=0.9 trim=5.2" },

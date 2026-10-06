@@ -996,9 +996,20 @@ instruments **in alphabetical order** (`presets.c`), so the list is easy to find
 your way along (the user, 2026-10-05); `TYPE` keeps its families. The first of each is the instrument's default sound,
 named after it, and is what turning `TYPE` loads. The other two each name a
 familiar way of playing it (*Vibes Motor Off*, *Chimes Muted*, *Organ Jazz Perc*,
-*Cello Auto Bow*) and change only what that needs, as `key=value` pairs over the
-voicing. For the bowed, rubbed and blown instruments one of the two is usually an
-*Auto* preset, which holds a note steady however hard the pad is pressed.
+*Cello Auto Bow*), as `key=value` pairs over the voicing. For the bowed, rubbed
+and blown instruments one of the two is usually an *Auto* preset, which holds a
+note steady however hard the pad is pressed.
+
+- **The three in a group sound clearly different** (the user, 2026-10-06: some
+  sounded nearly the same). A variation moves four to eight of the knobs that
+  matter on that instrument, usually the opposite way from its sibling: one
+  nearer, brighter, drier and quicker, the other softer, further off, longer or
+  moving. An *Auto* preset also has its own sound, a slower swell in a larger
+  room, because with an ordinary touch the hold alone is not heard. A measurement
+  of brightness, ring, attack, width, wobble and hold on the test phrase keeps
+  every pair in a group apart. (Rejected: changing only the knob the name
+  describes, as first built. *Clarinet Bright* moved two knobs a little and
+  measured the same as *Clarinet*.)
 
 - **Names are twenty plain characters at most, the instrument's word first.** The
   preset page draws the name in capitals in the 6 px cell font across 120 px, so
