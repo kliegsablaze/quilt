@@ -4,9 +4,8 @@
  *
  *   KIND  Velocity, MPE, LFO or Envelope. Velocity, MPE and Envelope are
  *         every note's own; an LFO is one for all of them.
- *   AIM   any knob on any other page, TYPE included, or another modulator's
- *         own knobs. A word from the Instrument page (Edge, Body...) is
- *         whichever knob has that word on the instrument playing.
+ *   AIM   one of ten: TONE, SOFT, CHARACTER, DECAY, SWAY, SPACE, VOL, TYPE,
+ *         or the next modulator's rate or depth.
  *   DEPTH how far, either way: full depth sweeps the whole knob.
  *
  * Nothing here writes what a knob is set to. Each block, the values a
@@ -15,9 +14,9 @@
  * A note's own sources move it alone; what every note shares (the room, the
  * Leslie, VOL) follows the newest note.
  *
- * The modulators are worked out in order, each with the others as they stand,
- * so a ring (1 into 2 into 3 into 4 into 1) hears its last link one block late
- * and cannot run away.
+ * The modulators are worked out in order, each with the one before as it
+ * stands, so the ring (1 into 2 into 3 into 4 into 1) hears its last link one
+ * block late and cannot run away.
  */
 #include <math.h>
 #include <string.h>
@@ -44,38 +43,19 @@ static const char *const KIND_OPTS[] = { "Velocity", "MPE", "LFO", "Envelope" };
 static const char *const SHAPE_OPTS[] = { "Sine", "Triangle", "Saw", "Ramp", "Square", "Random", "Drift" };
 static const char *const AXIS_OPTS[] = { "Press", "Slide", "Bend" };
 
-/* Instrument-page words, each one the cell word of a knob on some page
- * shape; tests/test_quilt.c checks they match. */
-static const char *const WORDS[] = {
-    "Split", "Stiff", "Spot", "Body", "Noise", "Damp", "Pedal", "Edge", "Press", "Swell", "Bite", "Bow",
-    "Blur", "Hit", "Onset", "Air", "Ping", "Tail", "Click", "Leak", "Slow", "Fast", "Tune", "Tine",
-    "Crowd", "16'", "5.3'", "8'", "4'", "2.7'", "2'", "1.6'", "1.3'", "1'",
-};
-#define NWORDS ((int)(sizeof(WORDS) / sizeof(WORDS[0])))
-_Static_assert(sizeof(WORDS) / sizeof(WORDS[0]) <= QUILT_MAX_WORDS, "the word table fits");
-
-#define MOD_AIMS(n) "Mod " #n " Kind", "Mod " #n " Shape", "Mod " #n " Rate", "Mod " #n " Rise", \
-    "Mod " #n " Fall", "Mod " #n " Axis", "Mod " #n " Lag", "Mod " #n " Aim 1", "Mod " #n " Depth 1", \
-    "Mod " #n " Aim 2", "Mod " #n " Depth 2"
-
-/* The destinations, in page order: Main, the Instrument page's words,
- * Effects, then the modulators' own knobs in MP_ order. */
+/* The destinations: the knobs that change a sound most for what they cost to
+ * aim, then TYPE, then the next modulator in the ring (1 into 2 into 3 into 4
+ * into 1). Next Rate speeds that LFO up, or shortens that envelope; Next
+ * Depth turns up both its depths. */
 static const char *const AIMS[] = {
-    "None", "Type", "Soft", "Character", "Decay", "Sway", "Tone", "Space", "Volume",
-    "Split", "Stiff", "Spot", "Body", "Noise", "Damp", "Pedal", "Edge", "Press", "Swell", "Bite", "Bow",
-    "Blur", "Hit", "Onset", "Air", "Ping", "Tail", "Click", "Leak", "Slow", "Fast", "Tune", "Tine",
-    "Crowd", "16'", "5.3'", "8'", "4'", "2.7'", "2'", "1.6'", "1.3'", "1'",
-    "Size", "Dark", "Delay", "Drive", "Speed",
-    MOD_AIMS(1), MOD_AIMS(2), MOD_AIMS(3), MOD_AIMS(4),
+    "None", "Tone", "Soft", "Character", "Decay", "Sway", "Space", "Volume", "Type", "Next Rate", "Next Depth",
 };
 #define NAIMS ((int)(sizeof(AIMS) / sizeof(AIMS[0])))
-#define A_WORDS 9
-#define A_FX (A_WORDS + NWORDS)
-#define A_MODS (A_FX + 5)
-_Static_assert(A_MODS + QUILT_MODS * MP_COUNT == NAIMS, "every destination is named");
+enum { A_NONE, A_TONE, A_SOFT, A_CHAR, A_DECAY, A_SWAY, A_SPACE, A_VOLUME, A_TYPE, A_NRATE, A_NDEPTH };
+_Static_assert(A_NDEPTH + 1 == NAIMS, "every destination is named");
 
-static const int MAIN_G[] = { -1, -1, G_SOFT, -1, G_DECAY, G_SWAY, G_TONE, G_SPACE, G_VOLUME };
-static const int FX_G[] = { G_SIZE, G_DARK, G_DELAY, G_DRIVE, G_SPEED };
+/* Each knob destination's global, or -1 (CHARACTER is the instrument's own). */
+static const int AIM_G[] = { -1, G_TONE, G_SOFT, -1, G_DECAY, G_SWAY, G_SPACE, G_VOLUME };
 
 const param_def_t QUILT_MOD_PARAMS[MP_COUNT] = {
     [MP_KIND] = E("kind", "Kind", "Kind", KIND_OPTS, 0.0f),
@@ -100,8 +80,6 @@ static const param_def_t CHAR_DEF = F("char", "Char", "Character", 0.5f);
 
 int quilt_aim_count(void) { return NAIMS; }
 const char *quilt_aim_name(int i) { return i >= 0 && i < NAIMS ? AIMS[i] : ""; }
-int quilt_word_count(void) { return NWORDS; }
-const char *quilt_word(int i) { return WORDS[i]; }
 
 int quilt_mod_key(const char *key, int *mod_out) {
     if (strncmp(key, "mod", 3) || key[3] < '1' || key[3] > '0' + QUILT_MODS || key[4] != '_') return -1;
@@ -123,12 +101,6 @@ void quilt_mod_init(quilt_t *q) {
         memcpy(q->run[m].e, q->mod[m], sizeof(q->run[m].e));
         q->run[m].rng = 0x2545F491u * (uint32_t)(m + 1);
     }
-    for (int s = 0; s < SH_COUNT; s++)
-        for (int w = 0; w < NWORDS; w++) {
-            q->word_slot[s][w] = -1;
-            for (int k = 0; k < quilt_shape_key_count((shape_t)s); k++)
-                if (!strcmp(quilt_shape_param((shape_t)s, k)->cell, WORDS[w])) q->word_slot[s][w] = (signed char)k;
-        }
     for (int c = 0; c < 16; c++) q->ch_slide[c] = 0.0f;
 }
 
@@ -225,22 +197,16 @@ static float modulate(const param_def_t *d, float v, float off) {
     return d->kind == PK_FLOAT ? r : floorf(r + 0.5f);
 }
 
-static int aim_mod(int aim, int *p) {
-    if (aim < A_MODS || aim >= NAIMS) return -1;
-    *p = (aim - A_MODS) % MP_COUNT;
-    return (aim - A_MODS) / MP_COUNT;
-}
-
 /* Every route's offset from a context's sources, merged by destination.
  * src[m] is modulator m's value for this context. Routes into the
- * modulators themselves are left to mod_block. */
+ * the next modulator and TYPE are left to mod_block and mod_note. */
 static void gather(const quilt_t *q, const float *src, mod_ctx_t *c) {
     c->n = 0;
     for (int m = 0; m < QUILT_MODS; m++)
         for (int r = 0; r < 2; r++) {
             const int aim = (int)q->run[m].e[MP_AIM1 + 2 * r];
             const float d = q->run[m].e[MP_DEPTH1 + 2 * r] * src[m];
-            if (aim <= 0 || aim >= A_MODS || d == 0.0f) continue;
+            if (aim <= A_NONE || aim >= A_TYPE || d == 0.0f) continue;
             int i = 0;
             while (i < c->n && c->aim[i] != aim) i++;
             if (i == c->n) { c->aim[c->n] = aim; c->off[c->n++] = 0.0f; }
@@ -254,24 +220,14 @@ void mod_apply(quilt_t *q, mod_ctx_t *c, int inst, float *gd) {
     memcpy(c->gsp, q->gs_prev, sizeof(c->gsp));
     c->ns = 0;
     float dn[G_COUNT] = { 0 };
-    const shape_t s = QUILT_INST[inst].shape;
     for (int i = 0; i < c->n; i++) {
         const int a = c->aim[i];
-        float *p = NULL;
-        const param_def_t *d = NULL;
-        int g = a < A_WORDS ? MAIN_G[a] : (a >= A_FX && a < A_MODS ? FX_G[a - A_FX] : -1);
+        const int g = AIM_G[a];
         if (g >= 0) { dn[g] = modulate(&QUILT_GLOBALS[g], q->g[g], c->off[i]) - q->g[g]; continue; }
-        if (a == 3) { p = &q->charv[inst]; d = &CHAR_DEF; }
-        else if (a >= A_WORDS && a < A_FX) {
-            const int k = q->word_slot[s][a - A_WORDS];
-            if (k < 0) continue;
-            p = &q->slot[inst][k];
-            d = quilt_shape_param(s, k);
-        }
-        if (!p) continue;
+        float *p = &q->charv[inst];   /* A_CHAR */
         c->ptr[c->ns] = p;
         c->val[c->ns++] = *p;
-        *p = modulate(d, *p, c->off[i]);
+        *p = modulate(&CHAR_DEF, *p, c->off[i]);
     }
     for (int g = 0; g < G_COUNT; g++) {
         q->g[g] += dn[g];
@@ -295,15 +251,21 @@ void mod_block(quilt_t *q, int frames) {
     const int held = q->held_keys > 0 || q->pedal;
     for (int m = 0; m < QUILT_MODS; m++) {
         struct mod_run *r = &q->run[m];
-        /* This modulator's knobs, moved by the others as they stand. */
-        float off[MP_COUNT] = { 0 };
-        for (int j = 0; j < QUILT_MODS; j++)
-            for (int k = 0; k < 2; k++) {
-                int p;
-                if (aim_mod((int)q->run[j].e[MP_AIM1 + 2 * k], &p) == m)
-                    off[p] += q->run[j].e[MP_DEPTH1 + 2 * k] * q->run[j].out;
-            }
+        /* This modulator's knobs, moved by the one before it as it stands. */
+        const struct mod_run *prev = &q->run[(m + QUILT_MODS - 1) % QUILT_MODS];
+        float off[MP_COUNT] = { 0 }, speed = 0.0f;
+        for (int k = 0; k < 2; k++) {
+            const int aim = (int)prev->e[MP_AIM1 + 2 * k];
+            const float d = prev->e[MP_DEPTH1 + 2 * k] * prev->out;
+            if (aim == A_NRATE) { speed += d; off[MP_RISE] -= d; off[MP_FALL] -= d; }
+            if (aim == A_NDEPTH) { off[MP_DEPTH1] += d; off[MP_DEPTH2] += d; }
+        }
         for (int p = 0; p < MP_COUNT; p++) r->e[p] = modulate(&QUILT_MOD_PARAMS[p], q->mod[m][p], off[p]);
+        /* RATE is faster away from the centre on either side, and stays on
+         * its own side: in time stays in time, free stays free. */
+        const float base = q->mod[m][MP_RATE];
+        r->e[MP_RATE] = base < 0.0f ? fminf(0.0f, fmaxf(-1.0f, base - 2.0f * speed))
+                                    : fmaxf(0.0f, fminf(1.0f, base + 2.0f * speed));
         switch (kind_of(r->e)) {
         case MK_LFO: lfo_advance(q, m, frames); r->out = r->lfo; break;
         case MK_ENV: r->env = env_step(r->env, held, r->e[MP_RISE], r->e[MP_FALL], dt); r->out = r->env; break;
@@ -373,7 +335,7 @@ int mod_note(quilt_t *q, int note, int vel, mod_ctx_t *c, voice_mod_t *vm) {
     float type_off = 0.0f;
     for (int m = 0; m < QUILT_MODS; m++)
         for (int r = 0; r < 2; r++)
-            if ((int)q->run[m].e[MP_AIM1 + 2 * r] == 1) type_off += q->run[m].e[MP_DEPTH1 + 2 * r] * src[m];
+            if ((int)q->run[m].e[MP_AIM1 + 2 * r] == A_TYPE) type_off += q->run[m].e[MP_DEPTH1 + 2 * r] * src[m];
     gather(q, src, c);
     if (type_off == 0.0f) return q->type;
     const float t = modulate(&QUILT_TYPE_PARAM, (float)quilt_type_index(q->type), type_off);

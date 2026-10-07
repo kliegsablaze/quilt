@@ -60,6 +60,8 @@ static void param_json(sb_t *b, const param_def_t *d) {
         for (int i = 0; i < d->noptions; i++)
             sb_printf(b, "%s\"%s\"", i ? "," : "", d->options[i]);
         sb_printf(b, "],\"options_as_string\":true");
+        /* Four numbers: the cell already says which, so no list over the page. */
+        if (d == &QUILT_MOD_SELECT) sb_printf(b, ",\"peek\":false");
     } else if (d->kind == PK_INT) {
         sb_printf(b, "\"type\":\"int\",\"min\":%d,\"max\":%d", (int)d->min, (int)d->max);
     } else if (d->min < 0.0f) {   /* either way from the centre, as a percentage */

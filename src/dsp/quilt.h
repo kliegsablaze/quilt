@@ -77,7 +77,6 @@ enum {
 /* ---- Modulation: four modulators on their own page (mod.c; DESIGN.md,
  * Modulation). A modulator's knobs, in the order its destinations name them. */
 #define QUILT_MODS 4
-#define QUILT_MAX_WORDS 40
 enum { MK_VELOCITY, MK_MPE, MK_LFO, MK_ENV };
 enum {
     MP_KIND, MP_SHAPE, MP_RATE, MP_RISE, MP_FALL, MP_AXIS, MP_LAG,
@@ -458,7 +457,6 @@ typedef struct {
     float ch_slide[16], ch_bend[16];
     float shared_gd[G_COUNT];
     float vol_d, vol_d_prev;            /* VOL's move this block and last, in dB */
-    signed char word_slot[SH_COUNT][QUILT_MAX_WORDS];   /* an Instrument-page word's knob on each shape */
     char *hierarchy, *chain_params;
     int hierarchy_len, chain_params_len;
 } quilt_t;
@@ -488,8 +486,6 @@ extern const param_def_t QUILT_MOD_PARAMS[MP_COUNT];  /* "modN_<key>" */
 int quilt_mod_key(const char *key, int *mod_out);     /* MP_ index, or -1 */
 int quilt_aim_count(void);
 const char *quilt_aim_name(int i);
-int quilt_word_count(void);
-const char *quilt_word(int i);
 int quilt_rate_sync(float rate);        /* the bar division, or -1 when free */
 float quilt_rate_beats(int sync);
 float quilt_rate_hz(float rate);

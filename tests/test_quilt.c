@@ -1825,24 +1825,15 @@ static void modulation(void) {
           is(p, "mod3_kind", "Velocity") && is(p, "mod4_kind", "MPE"), "the four modulators start as four kinds");
     CHECK(is(p, "mod1_aim1", "None") && num(p, "mod1_depth1") == 0, "and modulate nothing");
     A->set_param(p, "mod", "3");
-    A->set_param(p, "mod2_aim2", "Mod 3 Rate");
+    A->set_param(p, "mod2_aim2", "Next Rate");
     A->set_param(p, "mod2_depth2", "-7");
-    CHECK(is(p, "mod", "3") && is(p, "mod2_aim2", "Mod 3 Rate") && fabs(num(p, "mod2_depth2") + 1) < 1e-4,
+    CHECK(is(p, "mod", "3") && is(p, "mod2_aim2", "Next Rate") && fabs(num(p, "mod2_depth2") + 1) < 1e-4,
           "MOD, AIM and DEPTH are kept, DEPTH clamped to -100%%");
     CHECK(is(p, "mod1_gap1", " ") && is(p, "mod4_gap2", " "), "the blank cells answer a blank");
-    for (int w = 0; w < quilt_word_count(); w++) {
-        int found = 0;
-        for (int s = 0; s < SH_COUNT; s++)
-            for (int k = 0; k < quilt_shape_key_count((shape_t)s); k++)
-                found |= !strcmp(quilt_shape_param((shape_t)s, k)->cell, quilt_word(w));
-        CHECK(found, "AIM's word %s is a knob on some instrument", quilt_word(w));
-    }
-    for (int s = 0; s < SH_COUNT; s++)
-        for (int k = 0; k < quilt_shape_key_count((shape_t)s); k++) {
-            int found = 0;
-            for (int w = 0; w < quilt_word_count(); w++) found |= !strcmp(quilt_shape_param((shape_t)s, k)->cell, quilt_word(w));
-            CHECK(found, "%s can be aimed at", quilt_shape_param((shape_t)s, k)->key);
-        }
+    CHECK(quilt_aim_count() == 11, "ten destinations and None");
+    CHECK(strstr(get(p, "chain_params"), "\"key\":\"mod\",\"name\":\"Modulator\"") &&
+          strstr(strstr(get(p, "chain_params"), "\"key\":\"mod\","), "\"peek\":false"),
+          "turning MOD raises no list");
 
     /* A factory preset leaves the page alone; a saved sound keeps it; a
      * sound saved before the page had none. */
@@ -1857,7 +1848,7 @@ static void modulation(void) {
     void *r = A->create_instance(".", "");
     A->set_param(r, "state", blob);
     CHECK(is(r, "mod2_kind", "LFO") && is(r, "mod2_aim1", "Tone") && fabs(num(r, "mod2_depth1") + 0.5) < 1e-4 &&
-          is(r, "mod2_aim2", "Mod 3 Rate"), "state keeps the modulation");
+          is(r, "mod2_aim2", "Next Rate"), "state keeps the modulation");
     A->set_param(r, "state", "{\"v\":3,\"type\":\"Marimba\"}");
     CHECK(is(r, "mod2_kind", "Envelope") && is(r, "mod2_aim1", "None"), "a sound saved before the page has no modulation");
     A->destroy_instance(r);
@@ -1901,11 +1892,29 @@ static void modulation(void) {
     A->destroy_instance(p);
 
     /* A note's own envelope moves what its engine reads as it plays: the
-     * flute's breath comes in over the held note. */
-    p = note("Flute", 72, 100, 44100 * 2, -1, "mod2_rise=0.8;mod2_aim1=Air;mod2_depth1=1");
-    const double dull = centroid_at(4410), breathy = centroid_at(44100 + 22050);
-    CHECK(breathy > dull * 1.1, "an envelope on the flute's AIR brings the breath in (%.0f to %.0f Hz)", dull, breathy);
+     * organ darkens over the held note. */
+    p = note(organ, 60, 100, 44100 * 2, -1, "mod2_rise=0.8;mod2_aim1=Tone;mod2_depth1=-1");
+    const double bright = centroid_at(4410), dull = centroid_at(44100 + 22050);
+    CHECK(bright > dull * 1.1, "an envelope on TONE darkens the organ (%.0f to %.0f Hz)", bright, dull);
     A->destroy_instance(p);
+
+    /* Next Rate: velocity on modulator 4 speeds up modulator 1's LFO, the
+     * next one round, and keeps it on its own side of the centre. */
+    for (int side = 0; side < 2; side++) {
+        p = A->create_instance(".", "");
+        A->set_param(p, "mod1_rate", side ? "-0.3" : "0.3");
+        A->set_param(p, "mod4_kind", "Velocity");
+        A->set_param(p, "mod4_aim1", "Next Rate");
+        A->set_param(p, "mod4_depth1", "1");
+        rms(p, 1, NULL);
+        midi3(p, 0x90, 60, 127);
+        rms(p, 2, NULL);
+        const float e = ((quilt_t *)p)->run[0].e[MP_RATE];
+        CHECK(side ? e == -1.0f : e == 1.0f, "Next Rate speeds the next LFO, %s (%.2f)", side ? "free" : "in time", e);
+        CHECK(is(p, "mod1_rate", side ? "-0.3" : "0.3") || fabs(num(p, "mod1_rate") - (side ? -0.3 : 0.3)) < 1e-4,
+              "and its knob stays");
+        A->destroy_instance(p);
+    }
 
     /* MPE: pad pressure on VOL. */
     p = note(organ, 60, 100, 44100, -1, "mod4_aim1=Volume;mod4_depth1=0.4;mod4_lag=0");
@@ -1974,13 +1983,13 @@ static void modulation(void) {
     p = A->create_instance(".", "");
     A->set_param(p, "type", "Felt Upright");
     static const char *const kinds[] = { "LFO", "Envelope", "LFO", "MPE" };
-    static const char *const others[] = { "Tone", "Space", "Soft", "Edge" };
+    static const char *const others[] = { "Tone", "Space", "Soft", "Character" };
     for (int m = 1; m <= 4; m++) {
-        char k[32], v[32];
+        char k[32];
         snprintf(k, sizeof(k), "mod%d_kind", m); A->set_param(p, k, kinds[m - 1]);
         snprintf(k, sizeof(k), "mod%d_shape", m); A->set_param(p, k, "Random");
         snprintf(k, sizeof(k), "mod%d_rate", m); A->set_param(p, k, m % 2 ? "-0.9" : "0.9");
-        snprintf(k, sizeof(k), "mod%d_aim1", m); snprintf(v, sizeof(v), "Mod %d Rate", m % 4 + 1); A->set_param(p, k, v);
+        snprintf(k, sizeof(k), "mod%d_aim1", m); A->set_param(p, k, m % 2 ? "Next Rate" : "Next Depth");
         snprintf(k, sizeof(k), "mod%d_depth1", m); A->set_param(p, k, "1");
         snprintf(k, sizeof(k), "mod%d_aim2", m); A->set_param(p, k, others[m - 1]);
         snprintf(k, sizeof(k), "mod%d_depth2", m); A->set_param(p, k, "-1");
@@ -2008,9 +2017,9 @@ static void cost(void) {
            us, quilt_modal_in_use((quilt_t *)p), us / 2902.0 * 100.0);
     /* And with every modulator busy: an LFO and envelopes on the knobs every
      * note reads as it plays. */
-    static const char *const routes[][2] = { { "mod1_aim1", "Tone" }, { "mod1_aim2", "Damp" }, { "mod2_aim1", "Body" },
-        { "mod2_aim2", "Space" }, { "mod3_aim1", "Volume" }, { "mod3_aim2", "Character" }, { "mod4_aim1", "Spot" },
-        { "mod4_aim2", "Mod 1 Rate" } };
+    static const char *const routes[][2] = { { "mod1_aim1", "Tone" }, { "mod1_aim2", "Decay" }, { "mod2_aim1", "Sway" },
+        { "mod2_aim2", "Space" }, { "mod3_aim1", "Volume" }, { "mod3_aim2", "Character" }, { "mod4_aim1", "Soft" },
+        { "mod4_aim2", "Next Rate" } };
     for (int i = 0; i < 8; i++) {
         char d[24];
         A->set_param(p, routes[i][0], routes[i][1]);

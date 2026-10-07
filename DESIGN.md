@@ -1593,14 +1593,22 @@ the speed in figures ("1/16", "0.32HZ"), because the header can only show a
 percentage.
 
 The two `AIM`/`DEPTH` pairs send the modulator to two destinations. `DEPTH` is
-either way: at full, the source sweeps the whole of the knob it aims at. The
-destinations are every knob on every other page:
+either way: at full, the source sweeps the whole of the knob it aims at. There
+are ten destinations, the ones that change a sound most:
 
-- Main, `TYPE` and `VOL` included.
-- The Instrument and Drawbars pages, by word (`Edge`, `Body`, `8'`…): a word is
-  whichever knob has it on the instrument playing, and nothing on one without it.
-- Effects.
-- Every modulator's own knobs, its own included.
+- `Tone`, `Soft`, `Character`, `Decay`, `Sway`, `Space` and `Volume`, from Main.
+- `Type`, the instrument itself.
+- `Next Rate` and `Next Depth`, the next modulator round the ring (1 into 2, 2
+  into 3, 3 into 4, 4 into 1). `Next Rate` speeds that LFO up, either side of the
+  centre without crossing it, or shortens that envelope's rise and fall. `Next
+  Depth` turns up both of its depths.
+
+An earlier list offered every knob on every page, the Instrument page by word
+and every modulator's every knob: 91 entries, too many to scroll through on a
+knob, most of them never worth aiming at.
+
+`MOD` declares `"peek": false`: its cell already says which of four, so turning
+it raises no option list over the page.
 
 **What modulation never does.** It never writes a knob. Each block, a context's
 offsets are laid over the knobs while it renders, then put back (`mod_apply`,
@@ -1622,8 +1630,8 @@ tonewheel or pipe key struck this way is marked `free`, so a later turn of `TYPE
 does not let go of it.
 
 **A ring cannot run away.** The modulators are worked out in order each block,
-each moved by the others as they stand, so in a ring (1 into 2 into 3 into 4 into
-1) the last link is one block (2.9 ms) late.
+each moved by the one before it as it stands, so the ring's last link (4 into 1)
+is one block (2.9 ms) late.
 
 **Blank cells.** The host closes up a hidden cell, which would pull the
 destinations up into the top row where a `KIND` has nothing to show. Velocity
