@@ -17,7 +17,7 @@ every instrument.
 On Schwung 1.7.3 and later, every knob draws a small picture of what it does.
 
 Needs Schwung 1.6.3 or later. See [DESIGN.md](DESIGN.md) for how it works and
-why.
+why, and [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 ## Build and install
 
