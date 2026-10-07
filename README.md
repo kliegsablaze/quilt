@@ -9,8 +9,12 @@ bow, the breath and the swell.
 
 Turn `TYPE` to pick an instrument; each starts on its own default sound, and
 has two more factory presets (114 in all). The Main page is the same eight
-knobs for everything; the Instrument page is relabelled for each one. Module
-Help on the device explains every page and every instrument.
+knobs for everything; the Instrument page is relabelled for each one. The
+Modulation page has four modulators (velocity, MPE, LFO or envelope), each
+sent to two destinations. Module Help on the device explains every page and
+every instrument.
+
+On Schwung 1.7.3 and later, every knob draws a small picture of what it does.
 
 Needs Schwung 1.6.3 or later. See [DESIGN.md](DESIGN.md) for how it works and
 why.
