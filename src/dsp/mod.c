@@ -4,8 +4,9 @@
  *
  *   KIND  Velocity, MPE, LFO or Envelope. Velocity, MPE and Envelope are
  *         every note's own; an LFO is one for all of them.
- *   AIM   one of ten: TONE, SOFT, CHARACTER, DECAY, SWAY, SPACE, VOL, TYPE,
- *         or the next modulator's rate or depth.
+ *   AIM   one of eleven: TONE, SOFT, CHARACTER, a marimba's ROLL speed,
+ *         DECAY, SWAY, SPACE, VOL, TYPE, or the next modulator's rate or
+ *         depth.
  *   DEPTH how far, either way: full depth sweeps the whole knob.
  *
  * Nothing here writes what a knob is set to. Each block, the values a
@@ -48,14 +49,15 @@ static const char *const AXIS_OPTS[] = { "Press", "Slide", "Bend" };
  * into 1). Next Rate speeds that LFO up, or shortens that envelope; Next
  * Depth turns up both its depths. */
 static const char *const AIMS[] = {
-    "None", "Tone", "Soft", "Character", "Decay", "Sway", "Space", "Volume", "Type", "Next Rate", "Next Depth",
+    "None", "Tone", "Soft", "Character", "Roll", "Decay", "Sway", "Space", "Volume", "Type", "Next Rate", "Next Depth",
 };
 #define NAIMS ((int)(sizeof(AIMS) / sizeof(AIMS[0])))
-enum { A_NONE, A_TONE, A_SOFT, A_CHAR, A_DECAY, A_SWAY, A_SPACE, A_VOLUME, A_TYPE, A_NRATE, A_NDEPTH };
+enum { A_NONE, A_TONE, A_SOFT, A_CHAR, A_ROLL, A_DECAY, A_SWAY, A_SPACE, A_VOLUME, A_TYPE, A_NRATE, A_NDEPTH };
 _Static_assert(A_NDEPTH + 1 == NAIMS, "every destination is named");
 
-/* Each knob destination's global, or -1 (CHARACTER is the instrument's own). */
-static const int AIM_G[] = { -1, G_TONE, G_SOFT, -1, G_DECAY, G_SWAY, G_SPACE, G_VOLUME };
+/* Each knob destination's global, or -1 (CHARACTER is the instrument's own;
+ * ROLL is the mallets' speed, on the instruments that roll). */
+static const int AIM_G[] = { -1, G_TONE, G_SOFT, -1, -1, G_DECAY, G_SWAY, G_SPACE, G_VOLUME };
 
 const param_def_t QUILT_MOD_PARAMS[MP_COUNT] = {
     [MP_KIND] = E("kind", "Kind", "Kind", KIND_OPTS, 0.0f),
@@ -224,6 +226,7 @@ void mod_apply(quilt_t *q, mod_ctx_t *c, int inst, float *gd) {
         const int a = c->aim[i];
         const int g = AIM_G[a];
         if (g >= 0) { dn[g] = modulate(&QUILT_GLOBALS[g], q->g[g], c->off[i]) - q->g[g]; continue; }
+        if (a == A_ROLL) { q->roll_d = fmaxf(-1.0f, fminf(1.0f, c->off[i])); continue; }
         float *p = &q->charv[inst];   /* A_CHAR */
         c->ptr[c->ns] = p;
         c->val[c->ns++] = *p;
@@ -238,6 +241,7 @@ void mod_apply(quilt_t *q, mod_ctx_t *c, int inst, float *gd) {
 }
 
 void mod_restore(quilt_t *q, const mod_ctx_t *c) {
+    q->roll_d = 0.0f;
     for (int i = c->ns - 1; i >= 0; i--) *c->ptr[i] = c->val[i];
     memcpy(q->g, c->g, sizeof(c->g));
     memcpy(q->gs, c->gs, sizeof(c->gs));

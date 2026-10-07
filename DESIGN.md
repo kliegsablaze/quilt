@@ -1594,9 +1594,13 @@ percentage.
 
 The two `AIM`/`DEPTH` pairs send the modulator to two destinations. `DEPTH` is
 either way: at full, the source sweeps the whole of the knob it aims at. There
-are ten destinations, the ones that change a sound most:
+are eleven destinations, the ones that change a sound most:
 
 - `Tone`, `Soft`, `Character`, `Decay`, `Sway`, `Space` and `Volume`, from Main.
+- `Roll`, how fast the mallets roll on Marimba and Xylophone, from a quarter
+  of the speed to four times it. Their `CHARACTER` (`ROLL`) sets how hard the
+  roll strikes; this is the speed, which no knob sets (pressure does, when
+  the pads send it). On an instrument that does not roll it does nothing.
 - `Type`, the instrument itself.
 - `Next Rate` and `Next Depth`, the next modulator round the ring (1 into 2, 2
   into 3, 3 into 4, 4 into 1). `Next Rate` speeds that LFO up, either side of the

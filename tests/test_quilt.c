@@ -1830,7 +1830,7 @@ static void modulation(void) {
     CHECK(is(p, "mod", "3") && is(p, "mod2_aim2", "Next Rate") && fabs(num(p, "mod2_depth2") + 1) < 1e-4,
           "MOD, AIM and DEPTH are kept, DEPTH clamped to -100%%");
     CHECK(is(p, "mod1_gap1", " ") && is(p, "mod4_gap2", " "), "the blank cells answer a blank");
-    CHECK(quilt_aim_count() == 11, "ten destinations and None");
+    CHECK(quilt_aim_count() == 12, "eleven destinations and None");
     CHECK(strstr(get(p, "chain_params"), "\"key\":\"mod\",\"name\":\"Modulator\"") &&
           strstr(strstr(get(p, "chain_params"), "\"key\":\"mod\","), "\"peek\":false"),
           "turning MOD raises no list");
@@ -1897,6 +1897,30 @@ static void modulation(void) {
     const double bright = centroid_at(4410), dull = centroid_at(44100 + 22050);
     CHECK(bright > dull * 1.1, "an envelope on TONE darkens the organ (%.0f to %.0f Hz)", bright, dull);
     A->destroy_instance(p);
+
+    /* Roll: velocity on the mallets' speed, a marimba held for a second. */
+    {
+        int strikes[3];
+        for (int i = 0; i < 3; i++) {
+            static const char *const depth[] = { "0", "1", "-1" };
+            char extra[64];
+            snprintf(extra, sizeof(extra), "c_marimba=0.5;mod3_aim1=Roll;mod3_depth1=%s", depth[i]);
+            p = note("Marimba", 60, 127, 128, -1, extra);
+            const voice_t *v = NULL;
+            for (int j = 0; j < QUILT_VOICES; j++)
+                if (((quilt_t *)p)->v[j].active && ((quilt_t *)p)->v[j].note == 60) v = &((quilt_t *)p)->v[j];
+            strikes[i] = 0;
+            int16_t out[256];
+            for (int b = 0, was = v ? v->mv.roll_flip : 0; v && b < 345; b++) {
+                A->render_block(p, out, 128);
+                strikes[i] += v->mv.roll_flip != was;
+                was = v->mv.roll_flip;
+            }
+            A->destroy_instance(p);
+        }
+        CHECK(strikes[0] >= 6 && strikes[1] > 2.5 * strikes[0] && strikes[2] * 2.5 < strikes[0] && strikes[2] > 0,
+              "Roll speeds the mallets up and slows them down (%d, %d, %d strikes)", strikes[0], strikes[1], strikes[2]);
+    }
 
     /* Next Rate: velocity on modulator 4 speeds up modulator 1's LFO, the
      * next one round, and keeps it on its own side of the centre. */
@@ -2018,7 +2042,7 @@ static void cost(void) {
     /* And with every modulator busy: an LFO and envelopes on the knobs every
      * note reads as it plays. */
     static const char *const routes[][2] = { { "mod1_aim1", "Tone" }, { "mod1_aim2", "Decay" }, { "mod2_aim1", "Sway" },
-        { "mod2_aim2", "Space" }, { "mod3_aim1", "Volume" }, { "mod3_aim2", "Character" }, { "mod4_aim1", "Soft" },
+        { "mod2_aim2", "Space" }, { "mod3_aim1", "Volume" }, { "mod3_aim2", "Character" }, { "mod4_aim1", "Roll" },
         { "mod4_aim2", "Next Rate" } };
     for (int i = 0; i < 8; i++) {
         char d[24];

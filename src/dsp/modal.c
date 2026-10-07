@@ -652,11 +652,12 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
         }
     }
 
-    /* ROLL: hold a marimba note and the mallets roll; press to roll faster. */
+    /* ROLL: hold a marimba note and the mallets roll; press, or modulate Roll,
+     * to roll faster. */
     if (m->roll && v->held && q->charv[v->inst] > 0.02f) {
         m->held_t += dt;
         if (m->held_t > 0.15f && (m->roll_t -= dt) <= 0.0f) {
-            float rate = v->got_press ? 5.0f + 12.0f * v->press : 8.0f;
+            float rate = (v->got_press ? 5.0f + 12.0f * v->press : 8.0f) * exp2f(2.0f * q->roll_d);   /* x4 or /4 */
             m->roll_flip ^= 1;
             m->roll_t = (m->roll_flip ? 0.94f : 1.06f) / rate;
             float vel = m->v0 * (0.3f + 0.5f * q->charv[v->inst]) *

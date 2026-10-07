@@ -456,6 +456,7 @@ typedef struct {
     unsigned char key_down[128];
     float ch_slide[16], ch_bend[16];
     float shared_gd[G_COUNT];
+    float roll_d;                       /* the mallets' roll sped up (+) or slowed (-), while a note renders */
     float vol_d, vol_d_prev;            /* VOL's move this block and last, in dB */
     char *hierarchy, *chain_params;
     int hierarchy_len, chain_params_len;
