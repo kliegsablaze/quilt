@@ -23,6 +23,11 @@
 const W = 32, PIC = 11;
 /* How long a time control keeps moving after its knob was last turned. */
 const AWAKE_MS = 1500;
+/* A change bigger than this share of the knob's travel is a JUMP, not a turn:
+ * a step lock playing, a preset, TYPE, another track's Quilt. A turn moves
+ * in detents and glides; a jump shows its value at once and wakes nothing,
+ * or a page of step locks keeps every picture gliding and running. */
+const JUMP = 0.2;
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const TAU = Math.PI * 2;
 
@@ -30,9 +35,9 @@ const TAU = Math.PI * 2;
 /* The renderer is stateless; these remember just enough to ease a value and
  * to keep a running phase continuous when its rate changes. */
 const tweens = new Map();
-function eased(key, v, now) {
+function eased(key, v, now, jump) {
     let t = tweens.get(key);
-    if (!t || typeof now !== "number") { t = { from: v, to: v, t0: -1e9 }; tweens.set(key, t); return v; }
+    if (!t || typeof now !== "number" || jump) { t = { from: v, to: v, t0: -1e9 }; tweens.set(key, t); return v; }
     if (t.to !== v) { t.from = shown(t, now); t.to = v; t.t0 = now; }
     return shown(t, now);
 }
@@ -45,10 +50,10 @@ function shown(t, now) {
  * host says so) or turned within AWAKE_MS. Asleep, its phase holds still. */
 const lastTurn = new Map();
 let awake = true;
-function noteValue(key, v, now) {
+function noteValue(key, v, now, jump) {
     const l = lastTurn.get(key);
     if (!l) { lastTurn.set(key, { v, t: -1e9 }); return; }
-    if (l.v !== v) { l.v = v; l.t = now; }
+    if (l.v !== v) { l.v = v; l.t = jump ? -1e9 : now; }
 }
 const phases = new Map();
 function phase(key, hz, now) {
@@ -803,14 +808,18 @@ function drawCell(ctx, { values, group, nowMs, touched }) {
     const role = roleOf(key);
     const fn = D[role]; if (!fn) return false;
     const stepped = role === "drawbar" || role === "press" || role === "crowd" || key === "type" || !!OPTS[role] || role === "mod_aim";
-    const v = stepped ? v0 : eased(sid, v0, now);
-    noteValue(sid, v0, now);
+    const last = lastTurn.get(sid);
+    const jump = !!last && Math.abs(v0 - last.v) > JUMP;
+    const v = stepped ? v0 : eased(sid, v0, now, jump);
+    noteValue(sid, v0, now, jump);
     awake = !!(touched || (group && group.touched)) || now - lastTurn.get(sid).t < AWAKE_MS;
     const s = { key: sid, param: key, raw, type, now, inst: key.startsWith("c_") ? key.slice(2) : null,
         speed: Number.isFinite(Number(values.speed)) ? Number(values.speed) : 0.3 };
     if (key === "type") {
         const nm = typeName(raw);
         let typeTw = typeTws.get(sid); if (!typeTw) { typeTw = { name: null, from: null, t0: -1e9, dir: 1 }; typeTws.set(sid, typeTw); }
+        /* one instrument along slides; a jump of several (a lock, a preset) cuts */
+        if (typeTw.name !== nm && typeTw.name && Math.abs(TYPES.indexOf(nm) - TYPES.indexOf(typeTw.name)) > 2) { typeTw.name = nm; typeTw.from = null; typeTw.t0 = -1e9; }
         if (typeTw.name !== nm) { if (typeTw.name) { typeTw.from = typeTw.name; typeTw.t0 = now; typeTw.dir = TYPES.indexOf(nm) > TYPES.indexOf(typeTw.name) ? 1 : -1; } typeTw.name = nm; }
         s.type = nm; s.typeTween = { from: typeTw.from, k: clamp01((now - typeTw.t0) / 160), dir: typeTw.dir };
     }

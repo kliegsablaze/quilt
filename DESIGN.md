@@ -1696,6 +1696,16 @@ Three rules make them one set, and keep a page quiet:
   while the knob turns and for 1.5 s after. The file already reads a
   `touched` flag in case the host adds one. Every other value eases to a new
   one in 140 ms.
+- **A jump is not a turn.** A change of more than a fifth of the knob's
+  travel shows at once and starts no motion (`JUMP` in `canvas.js`). TYPE cuts
+  rather than slides when it moves more than two instruments.
+  - What causes a jump: a step lock playing, a preset, TYPE, or a second
+    Quilt on another track (the pictures' memory is per key, and the host
+    does not say which instance a cell is for).
+  - Before this, every lock that played looked like a turn. A page with many
+    locks kept its pictures gliding and running, which a Movy user reported
+    as knobs flickering among values (2026-10-09).
+  - Turns move in small detents, so they still glide and wake the motion.
 
 No card pops up while a knob is held. That was offered and declined.
 
@@ -1709,7 +1719,7 @@ and 2.3 ms with all eight cells moving at once.
 key of every instrument through the host's own frame and viz resolver. It
 checks that each cell resolves to the picture and draws inside its frame,
 clear of its edges and near its middle, that an unanswered value draws
-nothing, that a still picture replays exactly, and that the Leslie holds still until touched or turned.
+nothing, that a still picture replays exactly, that the Leslie holds still until touched or turned, and that a jump shows at once, wakes nothing and cuts TYPE.
 
 ## Will it fit
 

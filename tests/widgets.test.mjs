@@ -120,6 +120,32 @@ const t4 = draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.7 }, 5300);
 const t5 = draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.7 }, 5450);
 check(t4.px.some((x, i) => x !== t5.px[i]), "the Leslie turns just after its knob is turned");
 
+// A jump (a step lock, a preset) shows at once and wakes nothing; a turn glides.
+ov._reset();
+draw("space", { type: "Handpan", space: 0.1 }, 1000);
+const j0 = draw("space", { type: "Handpan", space: 0.9 }, 1010);
+ov._reset();
+const j1 = draw("space", { type: "Handpan", space: 0.9 }, 1010);
+check(j0.px.every((x, i) => x === j1.px[i]), "a jump draws its new value at once, with no glide");
+const j2 = draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.9 }, 1300);
+ov._reset();
+draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.1 }, 1000);
+draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.9 }, 1010);
+const j3 = draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.9 }, 1300);
+const j4 = draw("o_fast", { type: "Tonewheel Organ", o_fast: 0.9 }, 1450);
+check(j3.px.every((x, i) => x === j4.px[i]) && j2.lit > 0, "and a jump does not set the Leslie turning");
+ov._reset();
+draw("space", { type: "Handpan", space: 0.5 }, 1000);
+const g0 = draw("space", { type: "Handpan", space: 0.55 }, 1010);
+const g1 = draw("space", { type: "Handpan", space: 0.55 }, 1400);
+check(g0.px.some((x, i) => x !== g1.px[i]), "a turn still glides to its value");
+ov._reset();
+draw("type", { type: "Felt Upright" }, 1000);
+const ty0 = draw("type", { type: "Choir" }, 1010);
+ov._reset();
+const ty1 = draw("type", { type: "Choir" }, 1010);
+check(ty0.px.every((x, i) => x === ty1.px[i]), "TYPE jumping across the list cuts, it does not slide");
+
 // RATE says its speed in figures: bars and notes right of centre, hertz left.
 const rateLit = (v) => { ov._reset(); return draw("mod1_rate", { type: "Handpan", mod1_rate: v }, 1000).px; };
 check(rateLit(0.5).some((x, i) => x !== rateLit(0.55)[i]), "RATE's picture changes from 1/2T to 1/4.");
