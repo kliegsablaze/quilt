@@ -1011,8 +1011,16 @@ wheel browses **presets** on the Main page: **114, three per instrument**, the
 instruments **in alphabetical order** (`presets.c`), so the list is easy to find
 your way along (the user, 2026-10-05); `TYPE` keeps its families. The first of each is the instrument's default sound,
 named after it, and is what turning `TYPE` loads. The other two each name a
-familiar way of playing it (*Vibes Motor Off*, *Chimes Muted*, *Organ Jazz Perc*,
-*Cello Auto Bow*), as `key=value` pairs over the voicing. For the bowed, rubbed
+familiar way of playing it (*Vibraphone Motor Off*, *Tubular Bells Muted*,
+*Tonewheel Organ Jazz*, *Solo Cello Auto Bow*), as `key=value` pairs over the voicing.
+
+- **The whole list reads A to Z** (the user, 2026-10-11), not only the groups.
+  Each variation's name starts with its instrument's, or with a word that sorts
+  between its instrument and the next (*Hammered Soft*, *Una Corda Hall*), and
+  the two variations are in order. That renamed 28 of them (*Vibes Motor Off*
+  became *Vibraphone Motor Off*) and swapped the pair in 14 groups. State
+  version 4 moves a saved version 3 preset to its new place, so a song still
+  shows the preset it was saved with. For the bowed, rubbed
 and blown instruments one of the two is usually an *Auto* preset, which holds a
 note steady however hard the pad is pressed.
 
@@ -1068,7 +1076,7 @@ through `TYPE` (see *Implementation notes*).
 **Every default sound has `SPACE` at 0** (the user, 2026-10-06; it was 10 % from
 2026-10-05), so the instrument is heard dry and the room is a choice. The
 variations that are about being close no longer name a small `SPACE` of their own. The presets that are about a
-room (*Grand Far Hall*, *Chimes Cathedral*) keep theirs.
+room (*Una Corda Hall*, *Tubular Bells Church*) keep theirs.
 
 Each default sound, the *voicing*, is one line in `instruments.c`: Main from the
 instrument's row, then `key=value` pairs for `CHAR`, its own page and any Effects

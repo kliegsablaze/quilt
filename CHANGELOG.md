@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Tine and Reed Piano touch.** Soft notes are round, nearly a pure tone;
+  hard notes bark (tine) or bite (reed). Each velocity is as loud as before.
+- **BARK and BITE no longer click** when turned while a note rings.
+- **Presets read A to Z**, the whole list, with each instrument's three
+  together. Some were renamed so they sort in place, e.g. Vibes Motor Off is
+  now Vibraphone Motor Off and Organ Jazz Perc is Tonewheel Organ Jazz.
+  Saved songs keep their sound and show the right preset name.
+- **Knob pictures in Movy**: a value that jumps, as with step locks, shows at
+  once instead of gliding or setting things moving.
+
 ## 1.1.0
 
 ### Modulation page

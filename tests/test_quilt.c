@@ -126,7 +126,7 @@ static void presets(void *p) {
     A->set_param(p, "preset", idx);
     CHECK(is(p, "type", "Marimba") && is(p, "preset_name", "Marimba"), "a preset sets the instrument");
     CHECK(fabs(num(p, "decay") - 0.58) < 1e-3, "and Main to suit it");
-    snprintf(idx, sizeof(idx), "%d", quilt_type_first_preset(marimba) + 1);
+    snprintf(idx, sizeof(idx), "%d", quilt_type_first_preset(marimba) + 2);
     A->set_param(p, "preset", idx);
     CHECK(is(p, "type", "Marimba") && is(p, "preset_name", "Marimba Roll") &&
           fabs(num(p, "c_marimba") - 0.6) < 1e-3 && fabs(num(p, "decay") - 0.58) < 1e-3,
@@ -169,6 +169,13 @@ static void presets(void *p) {
         maps &= quilt_preset_type(quilt_type_first_preset(t)) == t &&
                 !strcmp(quilt_preset_name(quilt_type_first_preset(t)), QUILT_TYPE_NAMES[t]);
     CHECK(sorted, "the preset groups are in alphabetical order");
+    int az = 1;
+    for (int i = 1; i < QUILT_NPRESETS; i++)
+        if (strcmp(quilt_preset_name(i - 1), quilt_preset_name(i)) >= 0) {
+            az = 0;
+            printf("  out of order: '%s' before '%s'\n", quilt_preset_name(i - 1), quilt_preset_name(i));
+        }
+    CHECK(az, "the whole preset list reads A to Z");
     CHECK(maps, "each TYPE's first preset is its default sound");
     /* Every name fits the preset page and is its own; every change is a key
      * of that instrument, never VOL. */
@@ -286,7 +293,17 @@ static void state(void *p) {
     A->set_param(q, "state", "{\"v\":1,\"type\":\"Marimba\",\"preset\":14}");
     CHECK(num(q, "preset") == quilt_type_first_preset(14), "state: a version 1 preset is its instrument's first");
     A->set_param(q, "state", "{\"v\":2,\"type\":\"Marimba\",\"preset\":43}");
-    CHECK(num(q, "preset") == quilt_type_first_preset(14) + 1, "state: a version 2 preset keeps its instrument and place");
+    CHECK(num(q, "preset") == quilt_type_first_preset(14) + 2, "state: a version 2 preset keeps its instrument and preset");
+    {
+        char blob3[96];
+        snprintf(blob3, sizeof(blob3), "{\"v\":3,\"type\":\"Marimba\",\"preset\":%d}", quilt_type_first_preset(14) + 1);
+        A->set_param(q, "state", blob3);
+        CHECK(is(q, "preset_name", "Marimba Roll"), "state: a version 3 preset keeps its name");
+        snprintf(blob3, sizeof(blob3), "{\"v\":3,\"type\":\"Harp\",\"preset\":%d}",
+                 quilt_type_first_preset(quilt_type_index(quilt_instrument_by_name("Harp"))) + 1);
+        A->set_param(q, "state", blob3);
+        CHECK(is(q, "preset_name", "Harp Close"), "state: and in a group that kept its order");
+    }
     A->set_param(q, "state", "{\"v\":7,\"future\":{\"x\":1},\"type\":\"Vibraphone\",\"soft\":\"x\"}");
     CHECK(is(q, "type", "Vibraphone"), "state: unknown keys and values are skipped");
     A->set_param(q, "state", "{\"type\":\"Banjo\"}");
@@ -1807,6 +1824,35 @@ static void clicks(void) {
         }
         CHECK(worst[1] < worst[0] * 2.0, "%s: jumping end to end does not pop (%.4f vs %.4f)", knobs[k],
               worst[1], worst[0]);
+    }
+
+    /* BARK and BITE jumping end to end under a loud held note: the pickup's
+     * gap glides, so the note changes tone without a click. Measured
+     * against the note held still along the way, as the tone itself
+     * sharpens (BITE is spikiest at about three quarters). */
+    const char *pus[] = { "Tine Piano", "Reed Piano" }, *pkeys[] = { "c_tine_piano", "c_reed_piano" };
+    for (int k = 0; k < 2; k++) {
+        const char *at[] = { "0", "0.25", "0.5", "0.75", "1" };
+        double worst[6];
+        for (int run = 0; run < 6; run++) {   /* still at each of at[], then jumping */
+            void *p = A->create_instance(".", "");
+            A->set_param(p, "type", pus[k]);
+            A->set_param(p, "sway", "0");
+            A->set_param(p, pkeys[k], run < 5 ? at[run] : "0");
+            midi3(p, 0x90, 48, 120);
+            int16_t out[256];
+            for (int b = 0; b < 300; b++) {
+                if (run == 5 && b % 40 == 20) A->set_param(p, pkeys[k], (b / 40) % 2 ? "0" : "1");
+                A->render_block(p, out, 128);
+                for (int i = 0; i < 128; i++) wave[b * 128 + i] = out[2 * i] / 32768.0f;
+            }
+            worst[run] = spikiness(4410, 300 * 128 - 4410);
+            A->destroy_instance(p);
+        }
+        double still = 0;
+        for (int i = 0; i < 5; i++) still = fmax(still, worst[i]);
+        CHECK(worst[5] < still * 1.5, "%s: %s jumping end to end does not click (%.4f vs %.4f)", pus[k],
+              k ? "BITE" : "BARK", worst[5], still);
     }
 
     /* Four loud notes at once at full volume. The limiter is straight up to

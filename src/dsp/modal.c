@@ -762,9 +762,21 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
     const float td = expf(-1.0f / (r->thump_ms * 0.001f * QUILT_SR));
     const float buzz_a = r->ch == CH_BUZZ && q->charv[v->inst] > 0.02f ? noise_amount(q->charv[v->inst], 0.5f) : 0.0f;
     const float hd = expf(-1.0f / (0.03f * QUILT_SR));
-    /* The pickup's gap: BARK and BITE bring the tine or reed nearer. */
-    const float gap = r->pickup == PU_MAGNET ? 1.3f - 0.75f * q->charv[v->inst]
-                                             : 1.7f - 1.15f * q->charv[v->inst];
+    /* The pickup's gap: BARK and BITE bring the tine or reed nearer. It
+     * glides there, a sample at a time over about 30 ms: the pickup's output
+     * depends on the gap, and what is heard is its rate of change, so a gap
+     * that stepped at each block clicked under a turning knob (the user,
+     * 2026-10-11). */
+    const float gap_to = r->pickup == PU_MAGNET ? 1.3f - 0.75f * q->charv[v->inst]
+                                                : 1.7f - 1.15f * q->charv[v->inst];
+    if (m->pu_gap <= 0.0f) m->pu_gap = m->pu_gap_mid = gap_to;
+    /* Two glides in a row, so it eases in as well as out. */
+    const float glide = 1.0f - expf(-(float)frames / (0.01f * QUILT_SR));
+    m->pu_gap_mid += (gap_to - m->pu_gap_mid) * glide;
+    const float gap_end = m->pu_gap + (m->pu_gap_mid - m->pu_gap) * glide;
+    const float gap_step = (gap_end - m->pu_gap) / (float)frames;
+    float gap = m->pu_gap;
+    m->pu_gap = gap_end;
     /* A string pressed aside by a soft hammer follows the hammer's push, a
      * slow swing below the note that the board hardly radiates; heard
      * whole it is a thud louder than the note, the more so the softer the
@@ -782,6 +794,7 @@ void modal_render(quilt_t *q, voice_t *v, float *left, float *right, float *boar
             y = m->hp_y2;
         }
         if (r->pickup != PU_NONE) {
+            gap += gap_step;
             float o = pickup(r->pickup, y * m->pu_norm, gap);
             y = (o - m->pu_prev) * m->pu_comp;
             m->pu_prev = o;

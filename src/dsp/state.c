@@ -5,7 +5,7 @@
  * it sets each value directly and never loads a voicing, so a saved sound
  * comes back exactly (DESIGN.md, Every instrument starts beautiful).
  *
- *   {"v":3,"type":"Marimba","preset":69,"soft":0.6000,...,
+ *   {"v":4,"type":"Marimba","preset":69,"soft":0.6000,...,
  *    "c_felt_upright":0.5000,...,"marimba.m_spot":0.3000,...}
  *
  * The reader is one pass over "key":value pairs and ignores keys it does not
@@ -13,7 +13,9 @@
  * instrument, so its "preset" is a TYPE index; it maps to that instrument's
  * first preset. Version 2 had three per instrument in TYPE's order; version
  * 3 puts the instruments in alphabetical order, so a version 2 preset maps
- * to the same instrument's same preset in its new place.
+ * to the same instrument's same preset in its new place. Version 4 puts
+ * each instrument's two variations in alphabetical order as well, so a
+ * version 3 preset in a group that swapped them moves to its new place.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,7 +36,7 @@ static void put(out_t *o, const char *fmt, const char *key, double v) {
 
 int quilt_write_state(const quilt_t *q, char *buf, int buf_len) {
     out_t o = { buf, 0, buf_len };
-    int n = snprintf(buf, (size_t)buf_len, "{\"v\":3,\"type\":\"%s\",\"preset\":%d",
+    int n = snprintf(buf, (size_t)buf_len, "{\"v\":4,\"type\":\"%s\",\"preset\":%d",
                      QUILT_INST[q->type].name, q->preset);
     o.len = (n < 0 || n >= buf_len) ? -1 : n;
     put(&o, ",\"%s\":%.1f", "trim", q->trim);
@@ -94,6 +96,7 @@ static void apply(quilt_t *q, int *ver, const char *key, int klen, const char *s
         if (num < 0 || num >= (*ver < 2 ? QUILT_NTYPES : QUILT_NPRESETS)) return;
         if (*ver < 2) num = (float)quilt_type_first_preset((int)num);
         else if (*ver < 3) num = (float)(quilt_type_first_preset((int)num / QUILT_PER_TYPE) + (int)num % QUILT_PER_TYPE);
+        if (*ver >= 2 && *ver < 4) num = (float)quilt_preset_from_v3((int)num);
         q->preset = (int)num;
         return;
     }

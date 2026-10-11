@@ -119,6 +119,7 @@ const char *quilt_voicing(int inst);   /* "key=value" pairs; see instruments.c *
 #define QUILT_NPRESETS (QUILT_NTYPES * QUILT_PER_TYPE)
 int quilt_preset_type(int preset);      /* preset -> TYPE option */
 int quilt_type_first_preset(int t);     /* TYPE option -> its first preset */
+int quilt_preset_from_v3(int preset);   /* a state version 3 preset -> today's */
 const char *quilt_preset_name(int preset);
 const char *quilt_preset_changes(int preset);   /* "key=value" pairs over the voicing */
 int quilt_instrument_by_slug(const char *slug, int len);
@@ -201,6 +202,7 @@ typedef struct {
     tint_t thump_t, hiss_t; /* the knock's and the damper's colour */
     float buzz_z, buzz_z2;  /* the kalimba's buzzers */
     float pu_norm, pu_comp, pu_prev;   /* the tine or reed pickup */
+    float pu_gap, pu_gap_mid;          /* its gap as it glides to BARK's or BITE's; 0 not yet */
     float hp_x1, hp_y1, hp_x2, hp_y2;  /* the board's low cut, strings */
     float held_t, roll_t, roll_vel;
     int roll_flip;
