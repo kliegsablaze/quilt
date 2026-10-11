@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1
 
 - **Tine and Reed Piano touch.** Soft notes are round, nearly a pure tone;
   hard notes bark (tine) or bite (reed). Each velocity is as loud as before.
@@ -8,7 +8,22 @@
 - **Presets read A to Z**, the whole list, with each instrument's three
   together. Some were renamed so they sort in place, e.g. Vibes Motor Off is
   now Vibraphone Motor Off and Organ Jazz Perc is Tonewheel Organ Jazz.
-  Saved songs keep their sound and show the right preset name.
+  Saved songs keep their sound and show the right preset name. Renamed:
+  - E.Grand Bright, Drift: Electric Grand Punch, Electric Grand Drift
+  - Upright Bare Hammer, Felt Lullaby: Felt Upright Bare, Felt Upright Lullaby
+  - Glock Brass Mallets, Glock Far Away: Glockenspiel Brass, Glockenspiel Distant
+  - Dulcimer Soft, Dulcimer Bright: Hammered Soft, Hammered Shimmer
+  - Lever Harp: Harp Lever
+  - Music Box: Kalimba Music Box
+  - Nylon Bright, Nylon Warm: Nylon Guitar Bright, Nylon Guitar Warm
+  - Pizz Violas, Pizz Cellos: Pizzicato Violas, Pizzicato Cellos
+  - Cello Auto Bow, Cello Ponticello: Solo Cello Auto Bow, Solo Cello Bridge
+  - Violin Auto Bow, Violin Sul Tasto: Solo Violin Auto Bow, Solo Violin Veiled
+  - Ensemble Low, Ensemble High: String Ensemble Low, String Ensemble High
+  - Organ 888 Ballad, Organ Jazz Perc: Tonewheel Organ 888, Tonewheel Organ Jazz
+  - Chimes Muted, Chimes Cathedral: Tubular Bells Muted, Tubular Bells Church
+  - Grand Open Lid, Grand Far Hall: Una Corda Open Lid, Una Corda Hall
+  - Vibes Motor Off, Vibes Fast Motor: Vibraphone Motor Off, Vibraphone Fast
 - **Knob pictures in Movy**: a value that jumps, as with step locks, shows at
   once instead of gliding or setting things moving.
 
