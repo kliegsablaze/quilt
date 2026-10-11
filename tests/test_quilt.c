@@ -881,6 +881,22 @@ static void audible(void) {
             d = turn(pus[k], 60, 100, 22050, -1, "volume=0", pkeys[k], m_level, &a0, &a1);
             CHECK(fabs(d) < 6, "%s %s: changes the tone more than the level (%+.1f dB)", pus[k], what[k], d);
         }
+        /* Touch: a soft note round, nearly a sine; a full one barks or
+         * bites, its second harmonic far up. Before 1.1.1 the two ends were
+         * 19 and 15 dB apart, and a player heard too little difference. */
+        for (int k = 0; k < 2; k++) {
+            char extra[64];
+            snprintf(extra, sizeof(extra), "volume=0;m_split=0");
+            const double f0 = quilt_note_freq(quilt_instrument_by_name(pus[k]), 60);
+            double h2[2];
+            for (int z = 0; z < 2; z++) {
+                void *p = note(pus[k], 60, z ? 127 : 15, 8192 + 441, -1, extra);
+                h2[z] = part_db(441, 8192, 2 * f0) - part_db(441, 8192, f0);
+                A->destroy_instance(p);
+            }
+            CHECK(h2[0] < -28 && h2[1] - h2[0] > 25, "%s touch: soft round (2nd harmonic %.1f dB, under -28), "
+                  "full at least 25 dB more (%.1f dB)", pus[k], h2[0], h2[1]);
+        }
     }
 
     /* BELL: the upper modes come up. */

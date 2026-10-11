@@ -78,6 +78,7 @@ typedef struct {
     int dampers;              /* vibraphone, celesta, chimes: dampers on the pedal */
     pickup_t pickup;          /* tine and reed pianos */
     float pu_drive;           /* the swing at full velocity, in pickup gaps */
+    float pu_reach;           /* how much further a full blow swings it, so it barks or bites */
     /* both */
     char_kind_t ch;
     float transpose;          /* semitones above the key, as the parts are written */
@@ -272,14 +273,14 @@ static const modal_recipe_t RECIPES[] = {
       .ratio = TIN_RATIO, .amp = TIN_AMP, .t60r = TIN_T60, .nmodes = N(TIN_RATIO),
       .t60_ref = 7.0f, .f_ref = 261.6f, .t60_slope = 0.8f,
       .mass = 0.004f, .K = 4e9f, .p = 2.5f, .kb = 5e5f, .r = 40.0f,
-      .dampers = 1, .pickup = PU_MAGNET, .pu_drive = 0.8f, .ch = CH_BARK, .pan_spread = 0.3f,
+      .dampers = 1, .pickup = PU_MAGNET, .pu_drive = 0.8f, .pu_reach = 1.5f, .ch = CH_BARK, .pan_spread = 0.3f,
       .thump_hz = 700, .thump_ms = 6, .thump_gain = 4.06f },
     /* Felt hammers on reeds, heard through an electrostatic pickup. */
     { .name = "Reed Piano", .kind = MK_BAR, .gain = 0.5f,
       .ratio = REE_RATIO, .amp = REE_AMP, .t60r = REE_T60, .nmodes = N(REE_RATIO),
       .t60_ref = 3.5f, .f_ref = 261.6f, .t60_slope = 0.7f,
       .mass = 0.003f, .K = 6e9f, .p = 2.5f, .kb = 8e5f, .r = 40.0f,
-      .dampers = 1, .pickup = PU_CAP, .pu_drive = 0.7f, .ch = CH_BITE, .pan_spread = 0.2f,
+      .dampers = 1, .pickup = PU_CAP, .pu_drive = 0.7f, .pu_reach = 1.2f, .ch = CH_BITE, .pan_spread = 0.2f,
       .thump_hz = 900, .thump_ms = 5, .thump_gain = 6.52f },
 };
 
@@ -626,6 +627,18 @@ void modal_note_on(quilt_t *q, voice_t *v, int granted) {
      * in proportion: about 0.3 to 4.5 m/s for the hammers (Chaigne &
      * Askenfelt's range), and a little less for the mallets. */
     m->v0 = r->kind == MK_STRING ? 0.3f + 4.2f * vel : 0.3f + 3.2f * vel;
+    if (r->pickup != PU_NONE) {
+        /* Touch is heard in the tone: the swing grows as the square of the
+         * blow, not in proportion, so a soft note stays near the pickup's
+         * straight middle (round, nearly a sine) and a full one swings
+         * pu_reach times further, past the pole, and barks or bites. The
+         * output is scaled back by as much, so each velocity is as loud as
+         * it was and only the tone spreads. A player wanted the soft and
+         * hard ends further apart (2026-10-10). */
+        const float e = r->pu_reach * m->v0 / 3.5f;
+        m->pu_norm *= e;
+        m->pu_comp /= e;
+    }
     m->roll_t = 0.0f;
     strike(q, v, r, m->v0);
 }
